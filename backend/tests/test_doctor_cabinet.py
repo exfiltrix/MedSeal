@@ -76,6 +76,14 @@ def test_review_is_audited(filled_inbox, client):
     assert rows[0]["actor"] == "doctor"
 
 
+def test_review_by_the_admin_is_audited_as_admin(filled_inbox, client):
+    """The audit must say who actually cleared the flag, not a fixed "doctor"."""
+    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    client.post(f"/api/inbox/{filled_inbox['id']}/review", headers=admin)
+    rows = client.get("/api/audit?action=inbox_review", headers=admin).json()
+    assert rows[0]["actor"] == "admin"
+
+
 def test_public_patient_check_stays_open(filled_inbox, client, device):
     """The patient's QR link is the one thing that must keep working with no credentials —
     it carries no image and no patient data (docs/API.md "Public QR check")."""

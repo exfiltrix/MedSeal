@@ -1,5 +1,5 @@
 """HTTP hardening (docs/SECURITY.md, T11): security headers on every response, and a per-IP
-rate limit on POST requests (uploads are what costs CPU). Both are plain middleware, no dependency.
+rate limit on POST requests and on the few expensive public GETs (uploads, ledger walks, PDFs). Both are plain middleware, no dependency.
 
 In-memory limiter: fine for one backend process (the hackathon setup); behind several workers
 or a proxy, move it to the reverse proxy.
@@ -50,12 +50,21 @@ def _too_many(ip: str) -> float | None:
     return None
 
 
+def _expensive_get(request: Request) -> bool:
+    """Public GETs that walk the whole ledger or render a PDF: as costly as an upload, so they share
+    the POST budget (a loop of anonymous /ledger/check calls would otherwise be a free DoS)."""
+    path = request.url.path
+    return request.method == "GET" and (
+        path == "/api/ledger/check" or path.endswith("/pdf") or path.endswith("/qr.png")
+    )
+
+
 def install(app: FastAPI) -> None:
     """Call before adding CORS, so CORS stays outermost and a 429 still carries CORS headers."""
 
     @app.middleware("http")
     async def harden(request: Request, call_next):
-        if request.method == "POST":
+        if request.method == "POST" or _expensive_get(request):
             ip = request.client.host if request.client else "unknown"
             wait = _too_many(ip)
             if wait is not None:

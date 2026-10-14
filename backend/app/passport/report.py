@@ -139,6 +139,10 @@ def decide(
         if not validated:
             conditions.insert(0, CLINICAL_VALIDATION_REQUIRED)
         return "allowed_with_conditions", conditions
+    if score >= ALLOW_SCORE:
+        # Robust enough already: re-running the crash test would not change anything, the only
+        # thing missing is clinical validation (asking for a retest here sent people the wrong way).
+        return "not_allowed", [CLINICAL_VALIDATION_REQUIRED]
     if not validated:
         return "not_allowed", [CLINICAL_VALIDATION_REQUIRED, RETEST_REQUIRED]
     return "not_allowed", [RETEST_REQUIRED]

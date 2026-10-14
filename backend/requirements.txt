@@ -10,4 +10,4 @@ pillow==12.3.0
 fpdf2==2.8.8
 qrcode==7.4.2  # patient QR check
 python-dotenv==1.0.1  # secrets from backend/.env
-web3>=7,<9  # blockchain anchoring (app/anchor)
+web3==8.0.0  # blockchain anchoring (app/anchor)

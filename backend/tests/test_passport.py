@@ -52,6 +52,13 @@ def test_verdict_rules(score, shield_ok, validated, verdict):
     assert (report.CLINICAL_VALIDATION_REQUIRED in conditions) == (not validated)
 
 
+def test_robust_but_unvalidated_model_is_not_sent_to_retest():
+    """Score >= 7 without a shield or clinical validation: a new crash test cannot help."""
+    verdict, conditions = report.decide(8.5, False, None)
+    assert verdict == "not_allowed"
+    assert conditions == [report.CLINICAL_VALIDATION_REQUIRED]
+
+
 def test_passport_requires_admin_token(client, model_id):
     """P1-04: issuing a passport is an admin-only, credentialed action."""
     ct = add_crash_test(model_id)

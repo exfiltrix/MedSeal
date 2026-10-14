@@ -23,12 +23,15 @@ def find_content_match(session: Session, px, shape_json: str, dtype: str) -> tup
     """Best same-shape/dtype candidate by tile-overlap fraction among the top CANDIDATE_LIMIT
     closest by dHash, or None if nothing clears MATCH_THRESHOLD."""
     query_dhash = dhash(to_grayscale(px))
-    candidates = session.scalars(
-        select(Seal).where(Seal.shape == shape_json, Seal.dtype == dtype, Seal.dhash_hex != "")
+    # Rank on (id, dhash) only: loading full rows would pull every candidate's leaves_json
+    # (thousands of tile hashes each) into memory on every verification of an unknown image.
+    candidates = session.execute(
+        select(Seal.id, Seal.dhash_hex).where(Seal.shape == shape_json, Seal.dtype == dtype, Seal.dhash_hex != "")
     ).all()
     if not candidates:
         return None
-    ranked = sorted(candidates, key=lambda row: hamming_distance(query_dhash, row.dhash_hex))[:CANDIDATE_LIMIT]
+    top = sorted(candidates, key=lambda c: hamming_distance(query_dhash, c.dhash_hex))[:CANDIDATE_LIMIT]
+    ranked = [session.get(Seal, c.id) for c in top]
 
     best: tuple[Seal, float] | None = None
     for row in ranked:

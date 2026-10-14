@@ -38,6 +38,7 @@ THREAT_TESTS = {
             "test_threats::test_t10_dicom_pixel_bomb", "test_threats::test_t10_png_decompression_bomb",
             "test_api::test_rejects_unknown_format"],
     "T11": ["test_threats::test_t11_security_headers", "test_threats::test_t11_rate_limit",
+            "test_threats::test_t11_rate_limit_covers_expensive_public_gets",
             "test_threats::test_t11_sql_injection_in_uid", "test_api::test_create_device_requires_admin_token",
             "test_api::test_seal_requires_a_device_token"],
     "T12": ["test_api::test_dicom_seal_strips_patient_tags", "test_threats::test_t12_chain_gets_only_hashes",
@@ -142,6 +143,18 @@ def test_t11_rate_limit(client, monkeypatch):
                  for _ in range(4)]
         assert codes == [200, 200, 200, 429]
         assert client.get("/api/health").status_code == 200  # reads are not limited
+    finally:
+        security.reset_rate_limit()
+
+
+def test_t11_rate_limit_covers_expensive_public_gets(client, monkeypatch):
+    """/ledger/check walks the whole ledger anonymously: it must share the upload budget."""
+    monkeypatch.setattr(settings, "rate_limit_per_min", 2)
+    security.reset_rate_limit()
+    try:
+        codes = [client.get("/api/ledger/check").status_code for _ in range(3)]
+        assert codes == [200, 200, 429]
+        assert client.get("/api/health").status_code == 200  # cheap reads stay unlimited
     finally:
         security.reset_rate_limit()
 

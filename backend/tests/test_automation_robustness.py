@@ -244,3 +244,23 @@ def test_listing_no_longer_parses_the_stored_preview(client):
         row = s.scalar(select(Model))
         assert len(json.loads(row.result_json)["preview_png"]) > 1000
         assert set(json.loads(row.summary_json)) == {"device", "changed_tiles", "detective_probability", "risk", "error"}
+
+
+def test_a_new_image_under_a_reused_name_gets_its_own_row(client, watched):
+    """Scanners reuse names like scan.png: a new image must not overwrite the doctor's earlier
+    verdict (or clear its reviewed mark) just because the file name matches."""
+    (watched / "scan.png").write_bytes(xray_png(seed=63))
+    assert watcher.verify_incoming() == 1
+    with SessionLocal() as s:
+        first = s.scalar(select(InboxItem).where(InboxItem.file_name == "scan.png"))
+        first.reviewed = True
+        s.commit()
+        first_id, first_status = first.id, first.status
+
+    (watched / "scan.png").write_bytes(b"not an image at all")
+    assert watcher.verify_incoming() == 1
+    with SessionLocal() as s:
+        rows = s.scalars(select(InboxItem).where(InboxItem.file_name == "scan.png").order_by(InboxItem.id)).all()
+        assert [r.id for r in rows][0] == first_id and len(rows) == 2
+        assert rows[0].status == first_status and rows[0].reviewed is True
+        assert rows[1].status == "error"

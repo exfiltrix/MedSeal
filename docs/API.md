@@ -3,7 +3,7 @@
 All image uploads: `multipart/form-data`, field `file` (DICOM `.dcm` or `.png`). Images returned as base64 PNG previews (no `data:` prefix — use `data:image/png;base64,${preview_png}`).
 Interactive docs while the backend runs: http://localhost:8000/docs. CORS allows `http://localhost:3000`.
 
-Errors: `{"detail": "message"}` with status `404` (not found), `409` (conflict), `413` (file too large, > 50 MB, or decodes to > 64 Mpx), `429` (more than 120 POSTs per minute from one IP; `Retry-After` header), `415` (not a DICOM/PNG), `422` (missing/invalid field).
+Errors: `{"detail": "message"}` with status `404` (not found), `409` (conflict), `413` (file too large, > 50 MB, or decodes to > 64 Mpx), `429` (more than 120 POSTs — or expensive public GETs: `/ledger/check`, `*/pdf`, `*/qr.png` — per minute from one IP; `Retry-After` header), `415` (not a DICOM/PNG), `422` (missing/invalid field).
 All times are UTC ISO strings: `"2026-09-26T10:00:00Z"`.
 
 ## Devices

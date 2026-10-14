@@ -145,6 +145,8 @@ class InboxItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     file_name: Mapped[str] = mapped_column(String(300))
     source: Mapped[str] = mapped_column(String(16))  # upload | folder
+    # sha256 of the file bytes: with file_name, the identity of a watched file (see automation.inbox).
+    content_sha256: Mapped[str] = mapped_column(String(64), default="")
     # Lifecycle of the automatic pipeline, not of the image: new -> processing -> done | failed.
     # The doctor's triage (severity/status) is a separate axis and stays as it was. While a row is
     # still being verified, status/severity hold the PENDING placeholder — the row is committed

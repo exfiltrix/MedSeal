@@ -9,6 +9,7 @@ Two orthogonal axes, deliberately kept apart:
   state    new -> processing -> done | failed   (where the automatic pipeline got to)
   severity danger | warning | ok               (what the doctor has to do about it)
 """
+import hashlib
 import json
 from datetime import datetime, timedelta
 
@@ -79,17 +80,19 @@ def _summarize(result: dict) -> dict:
     }
 
 
-def find_folder_item(session: Session, file_name: str) -> InboxItem | None:
-    """The row a watched file already produced, if any.
+def find_folder_item(session: Session, file_name: str, content_sha256: str) -> InboxItem | None:
+    """The row this exact watched file already produced, if any.
 
     The watcher commits the inbox row before moving the file out of incoming/, so a crash in
     between would otherwise re-verify the same file and add a second, identical row to the
-    doctor's feed. Keyed on the file name, which is the identity of a watched file; uploads are
-    never deduplicated (the same name may legitimately arrive twice with different pixels).
+    doctor's feed. Keyed on file name AND content hash: scanners reuse names like scan.png, and a
+    new image under an old name must get its own row — reusing the old one would silently replace
+    the doctor's earlier verdict and clear its "reviewed" mark. Uploads are never deduplicated.
     """
     return session.scalar(
         select(InboxItem)
-        .where(InboxItem.source == "folder", InboxItem.file_name == file_name[:300])
+        .where(InboxItem.source == "folder", InboxItem.file_name == file_name[:300],
+               InboxItem.content_sha256 == content_sha256)
         .order_by(InboxItem.id.desc())
         .limit(1)
     )
@@ -101,9 +104,10 @@ def process(session: Session, data: bytes, file_name: str, source: str) -> Inbox
     Raises nothing for a bad image: an unreadable file is a triage outcome the doctor must see,
     not a crash. The caller (watcher) is responsible for its own I/O errors.
     """
-    item = find_folder_item(session, file_name) if source == "folder" else None
+    digest = hashlib.sha256(data).hexdigest()
+    item = find_folder_item(session, file_name, digest) if source == "folder" else None
     if item is None:
-        item = InboxItem(file_name=file_name[:300], source=source, state="processing",
+        item = InboxItem(file_name=file_name[:300], source=source, content_sha256=digest, state="processing",
                          status=PENDING, severity=PENDING)
         session.add(item)
     else:
@@ -130,8 +134,11 @@ def process(session: Session, data: bytes, file_name: str, source: str) -> Inbox
 
 
 def summary(item: InboxItem) -> dict:
-    stored = json.loads(item.summary_json or "{}") if item.summary_json else {}
-    result = json.loads(item.result_json) if item.result_json else {}
+    stored = json.loads(item.summary_json) if item.summary_json and item.summary_json != "{}" else None
+    if stored is None:
+        # Rows written before summary_json existed: fall back to the full result, once per row.
+        result = json.loads(item.result_json) if item.result_json else {}
+        stored = _summarize(result)
     return {
         "id": item.id,
         "file_name": item.file_name,
@@ -142,11 +149,11 @@ def summary(item: InboxItem) -> dict:
         "severity": item.severity,
         "reasons": json.loads(item.reasons_json or "[]"),
         "reviewed": item.reviewed,
-        "device": stored.get("device", result.get("device")),
+        "device": stored.get("device"),
         "changed_tiles": stored.get("changed_tiles", 0),
         "detective_probability": stored.get("detective_probability"),
-        "risk": stored["risk"] if "risk" in stored else _risk(result),
-        "error": stored.get("error", result.get("error")),
+        "risk": stored.get("risk"),
+        "error": stored.get("error"),
     }
 
 

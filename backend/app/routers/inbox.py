@@ -107,14 +107,15 @@ def inbox_batch_pdf(body: BatchPdfIn, lang: Literal["uz", "ru", "en"] = "uz", se
 
 
 @router.post("/inbox/{item_id}/review")
-def review(request: Request, item_id: int, session: Session = Depends(get_session)):
+def review(request: Request, item_id: int, session: Session = Depends(get_session),
+           role: str = Depends(require_doctor)):
     """Mark as looked at. Idempotent, and audited: clearing a red flag is a clinical action."""
     item = session.get(InboxItem, item_id)
     if item is None:
         raise HTTPException(404, "Inbox item not found")
     was = item.reviewed
     item.reviewed = True
-    audit.log(session, "inbox_review", "doctor", target=f"inbox:{item_id}",
+    audit.log(session, "inbox_review", role, target=f"inbox:{item_id}",
               result="already_reviewed" if was else "reviewed", ip=audit.client_ip(request))
     session.commit()
     return inbox.summary(item)
@@ -126,11 +127,12 @@ def automation_status():
 
 
 @router.post("/automation/run")
-def automation_run_now(request: Request, session: Session = Depends(get_session)):
+def automation_run_now(request: Request, session: Session = Depends(get_session),
+                       role: str = Depends(require_doctor)):
     """Process the watched folders right now instead of waiting for the next poll."""
     t0 = time.perf_counter()
     sealed, verified = watcher.run_once()
-    audit.log(session, "automation_run", "doctor", result=f"sealed:{sealed},verified:{verified}",
+    audit.log(session, "automation_run", role, result=f"sealed:{sealed},verified:{verified}",
               ip=audit.client_ip(request))
     session.commit()
     return {"sealed": sealed, "verified": verified, "elapsed_ms": round((time.perf_counter() - t0) * 1000, 2)}
