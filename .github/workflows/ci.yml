@@ -38,6 +38,15 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pytest -m "not ai" -p no:warnings -rs
 
+  images:
+    # The production images build (AI stack left out here to keep CI fast; same Dockerfiles).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --build-arg INSTALL_AI=0 -t medseal-backend:ci backend
+      - run: docker build --build-arg NEXT_PUBLIC_API_URL=https://medseal.example/backend -t medseal-frontend:ci by_billy/frontend
+      - run: docker run --rm medseal-backend:ci python -m app.hardening || true  # prints what a real deployment must set
+
   contracts:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: contracts } }

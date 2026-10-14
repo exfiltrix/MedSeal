@@ -37,3 +37,9 @@ contracts/node.log
 /*.pdf
 # the hackathon presentation itself is part of the submission
 !/MedSeal.pdf
+
+# production deployment: secrets, certificates, local state
+deploy/.env.prod
+deploy/certs/
+deploy/watch/
+deploy/backups/

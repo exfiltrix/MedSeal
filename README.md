@@ -241,6 +241,13 @@ Frontend (`by_billy/frontend/.env.local`, see `.env.example`):
 | `MEDSEAL_ADMIN_TOKEN` | server-only admin token for the crash-test/passport route handlers |
 | (no shared logins) | people sign in with personal accounts at `/login`: httpOnly + Secure + SameSite=Strict session cookie, roles decided by the backend; cross-site state-changing requests get `403` (CSRF) |
 
+## Production deployment
+
+`deploy/docker-compose.prod.yml` runs PostgreSQL, the API (several workers), one background worker, the
+website and an nginx TLS proxy, all non-root with read-only filesystems; the database sits on an internal
+network. `deploy/backup.sh` makes nightly backups. Step-by-step: **[docs/DEPLOY.md](docs/DEPLOY.md)**
+(secrets, HSM, first admin, daily checks, restore, incidents).
+
 ## Tests
 
 ```bash

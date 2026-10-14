@@ -21,8 +21,15 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+// Demo data must never ship: a production build with mocks on would show invented patients'
+// results as real ones. MEDSEAL_DEMO_BUILD=1 is the explicit opt-in for a showcase build.
+if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_USE_MOCK === "1" && process.env.MEDSEAL_DEMO_BUILD !== "1") {
+  throw new Error("NEXT_PUBLIC_USE_MOCK=1 in a production build: set MEDSEAL_DEMO_BUILD=1 if this is a demo build");
+}
+
 const nextConfig: NextConfig = {
   agentRules: false,
+  output: "standalone", // self-contained server for the container image (Dockerfile)
   allowedDevOrigins: lanHosts,
   poweredByHeader: false,
   async headers() {
