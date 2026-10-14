@@ -767,3 +767,24 @@ def test_png_text_chunks_are_removed_on_sealing(client, device):
     _, sealed = seal(client, device, buf.getvalue())
     assert set(Image.open(io.BytesIO(sealed)).text) == {"medseal_uid"}
     assert b"Ivanov" not in sealed and b"1980" not in sealed
+
+
+def test_concurrent_seals_from_several_processes_keep_the_ledger_intact(client, device, monkeypatch):
+    """Several uvicorn workers share one PostgreSQL database: the process-local lock is gone between
+    them (simulated by switching it off), so only the database advisory lock keeps the chain linear."""
+    import contextlib
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.seal import ledger
+
+    if db.engine.dialect.name != "postgresql":
+        pytest.skip("cross-process locking is PostgreSQL-only; SQLite serialises writers itself")
+    monkeypatch.setattr(ledger, "_append_lock", contextlib.nullcontext())
+    images = [xray_png(seed=200 + i) for i in range(12)]
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        responses = list(pool.map(lambda data: client.post(
+            "/api/seal", files={"file": ("img.png", data)}, headers=device["auth"]
+        ), images))
+    assert all(r.status_code == 200 for r in responses), [r.text for r in responses if r.status_code != 200]
+    result = client.get("/api/ledger/check").json()
+    assert result["ok"] is True and result["entries"] == 12 and result["broken"] == []

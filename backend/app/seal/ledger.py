@@ -3,7 +3,7 @@ import hashlib
 import json
 import threading
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,9 @@ from app.models import Seal, iso_utc, utcnow
 
 GENESIS = "0" * 64
 _append_lock = threading.Lock()
+# PostgreSQL advisory lock id for appends ("MEDSEAL" in ASCII). Several uvicorn workers or hosts share
+# one database, and _append_lock only serialises the threads of one process.
+LEDGER_LOCK_KEY = 0x4D4544534541
 
 
 def record_bytes(row: Seal) -> bytes:
@@ -51,6 +54,9 @@ def entry_hash(prev_hash: str, row: Seal) -> str:
 
 
 def _set_link(session: Session, row: Seal) -> None:
+    if session.get_bind().dialect.name == "postgresql":
+        # Held until the caller commits: no other process can read the same head in between.
+        session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": LEDGER_LOCK_KEY})
     head = session.scalar(select(Seal).order_by(Seal.id.desc()).limit(1))
     row.created_at = row.created_at or utcnow()
     row.prev_hash = head.entry_hash if head else GENESIS
@@ -60,7 +66,8 @@ def _set_link(session: Session, row: Seal) -> None:
 
 
 def append(session: Session, row: Seal) -> Seal:
-    """Link and insert under a process-local lock, retrying one lost-head race."""
+    """Link and insert under a process-local lock (plus a PostgreSQL advisory lock across processes),
+    retrying one lost-head race."""
     with _append_lock:
         for attempt in range(2):
             try:
