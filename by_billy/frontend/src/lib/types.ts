@@ -197,6 +197,9 @@ export type CrashTestJob = {
   // P1-04: only method=pgd, n_images>=50 and eps including 1 satisfies the passport protocol.
   protocol_compliant?: boolean;
   flip_rate?: Record<string, number>;
+  // Review round 1: sick -> healthy (hiding a finding). The score uses the worse direction.
+  flip_rate_reverse?: Record<string, number> | null;
+  n_images_reverse?: number;
   psnr?: Record<string, number>;
   example?: {
     eps?: number;
@@ -210,7 +213,13 @@ export type CrashTestJob = {
 
 export type Verdict = "allowed" | "allowed_with_conditions" | "not_allowed";
 
-export type PassportCondition = "shield_required" | "seal_required" | "doctor_decides" | "retest_required" | "clinical_validation_required";
+export type PassportCondition =
+  | "shield_required"
+  | "shield_bypassable_adaptive"
+  | "seal_required"
+  | "doctor_decides"
+  | "retest_required"
+  | "clinical_validation_required";
 
 export type Passport = {
   id: number;
@@ -230,6 +239,8 @@ export type Passport = {
     pathology: string;
     data: string[];
     flip_rate: Record<string, number>;
+    flip_rate_reverse?: Record<string, number> | null;
+    n_images_reverse?: number;
     psnr: Record<string, number>;
     example?: CrashTestJob["example"] | null;
   };
@@ -247,6 +258,9 @@ export type Passport = {
       false_positive_rate: { successes: number; n: number; lower: number; upper: number };
     };
     adaptive_attack_tested?: boolean;
+    // Share of attacks by a shield-aware attacker that fooled the model unnoticed (worst direction, eps 1 px).
+    adaptive_silent_success_eps1?: number | null;
+    bypassable?: boolean;
   };
   pipeline: {
     devices_active: number;
@@ -258,7 +272,7 @@ export type Passport = {
   verdict: Verdict;
   conditions: PassportCondition[];
   rules: { allow_score: number; shield_min_detection: number; shield_max_false_alarms: number };
-  protocol: { method: AttackMethod; min_images: number; eps_required: number[] };
+  protocol: { method: AttackMethod; min_images: number; eps_required: number[]; min_images_reverse?: number; version?: number };
   note: string;
 };
 

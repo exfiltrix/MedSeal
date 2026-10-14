@@ -184,7 +184,10 @@ def render(p: dict, lang: str = "uz") -> bytes:
             detection = ci["detection_pgd_eps1"]
             fpr = ci["false_positive_rate"]
             rows.append((t["shield_ci"], f"PGD {detection['lower']:.3f}–{detection['upper']:.3f}; FPR {fpr['lower']:.4f}–{fpr['upper']:.4f}"))
-        rows.append((t["adaptive_note"], ""))
+        if s.get("adaptive_attack_tested"):
+            rows.append((t["adaptive_result"], _pct(s.get("adaptive_silent_success_eps1"))))
+        else:
+            rows.append((t["adaptive_note"], ""))
     doc.rows(rows)
 
     # pipeline

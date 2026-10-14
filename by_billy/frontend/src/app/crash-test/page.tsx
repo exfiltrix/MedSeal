@@ -191,6 +191,20 @@ export default function CrashTestPage() {
               <p className="text-sm font-semibold">{t(d.chartTitle)}</p>
               <p className="mb-6 text-xs text-muted">{t(d.chartAxis)}</p>
               <FlipRateChart flipRate={job.flip_rate ?? {}} psnr={job.psnr ?? {}} psnrLabel={t(d.psnr)} caption={t(d.chartTitle)} epsLabel={t(d.attackStrength)} />
+              {job.flip_rate_reverse && (
+                <div className="mt-6">
+                  <p className="text-sm font-semibold">{t(dictionary.passport.reverseTitle)}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Object.entries(job.flip_rate_reverse)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([eps, v]) => (
+                        <span key={eps} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs">
+                          eps {eps}: <b>{Math.round(v * 100)}%</b>
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
             </Card>
 
             <Card className="flex flex-col">

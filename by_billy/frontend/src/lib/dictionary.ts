@@ -593,7 +593,7 @@ const dictionary = {
     createPassport: { uz: "Model pasportini yaratish", ru: "Создать паспорт модели", en: "Create model passport" },
     restart: { uz: "Qayta sinash", ru: "Запустить заново", en: "Run again" },
     protocolLabel: { uz: "Pasport protokoli", ru: "Протокол паспорта", en: "Passport protocol" },
-    protocolValue: { uz: "PGD · kamida 50 surat · eps=1", ru: "PGD · не менее 50 снимков · eps=1", en: "PGD · at least 50 images · eps=1" },
+    protocolValue: { uz: "PGD · kamida 50 surat · eps=1 · ikki yoʻnalish (sogʻlom→kasal, kasal→sogʻlom)", ru: "PGD · не менее 50 снимков · eps=1 · оба направления (здоров→болен, болен→здоров)", en: "PGD · at least 50 images · eps=1 · both directions (healthy→sick, sick→healthy)" },
     imagesRequested: { uz: "Soʻralgan suratlar", ru: "Запрошено снимков", en: "Images requested" },
     imagesLoaded: { uz: "Yuklangan suratlar", ru: "Загружено снимков", en: "Images loaded" },
     protocolNotMet: {
@@ -632,6 +632,11 @@ const dictionary = {
         uz: "Har bir surat modelga berilishidan oldin MedSeal qalqonidan o'tishi shart.",
         ru: "Каждый снимок проходит AI-щит MedSeal до того, как попадёт в модель.",
         en: "Every image passes the MedSeal shield before it reaches the model.",
+      },
+      shield_bypassable_adaptive: {
+        uz: "Qalqonni biladigan hujumchi uni aylanib o'tishi mumkin (adaptiv hujum sinovi): qalqon faqat oddiy hujumlardan himoya qiladi, qo'shimcha himoya kerak.",
+        ru: "Атакующий, знающий о щите, обходит его (тест адаптивной атаки): щит защищает только от обычных атак, нужна дополнительная защита.",
+        en: "An attacker who knows about the shield gets past it (adaptive attack test): the shield only stops ordinary attacks, further protection is needed.",
       },
       seal_required: {
         uz: "Suratlar olingan paytda muhrlanishi va modelga berilishidan oldin tekshirilishi shart.",
@@ -674,6 +679,16 @@ const dictionary = {
       ru: "95% доверительный интервал (нижняя / верхняя)",
       en: "95% confidence interval (lower / upper)",
     },
+    reverseTitle: {
+      uz: "Teskari yoʻnalish: kasal → sogʻlom (topilmani yashirish)",
+      ru: "Обратное направление: болен → здоров (скрыть находку)",
+      en: "Reverse direction: sick → healthy (hiding a finding)",
+    },
+    adaptiveResult: {
+      uz: "Qalqonni biladigan hujum (eps = 1 px) sezilmay o'tdi",
+      ru: "Атака, знающая о щите (eps = 1 px), прошла незамеченной",
+      en: "Attack that knows about the shield (eps = 1 px) went unnoticed",
+    },
     adaptiveNote: {
       uz: "Hali faqat qlalqon haqida bilmaydigan hujumlar sinovdan oʻtkazildi.",
       ru: "Пока проверены только атаки, которые не знают о щите.",
@@ -682,7 +697,7 @@ const dictionary = {
     imagesRequested: { uz: "Soʻralgan suratlar", ru: "Запрошено снимков", en: "Images requested" },
     imagesLoaded: { uz: "Yuklangan suratlar", ru: "Загружено снимков", en: "Images loaded" },
     protocolLabel: { uz: "Pasport protokoli", ru: "Протокол паспорта", en: "Passport protocol" },
-    protocolValue: { uz: "PGD · kamida 50 surat · eps=1", ru: "PGD · не менее 50 снимков · eps=1", en: "PGD · at least 50 images · eps=1" },
+    protocolValue: { uz: "PGD · kamida 50 surat · eps=1 · ikki yoʻnalish (sogʻlom→kasal, kasal→sogʻlom)", ru: "PGD · не менее 50 снимков · eps=1 · оба направления (здоров→болен, болен→здоров)", en: "PGD · at least 50 images · eps=1 · both directions (healthy→sick, sick→healthy)" },
     organisation: { uz: "Mas'ul tashkilot", ru: "Ответственная организация", en: "Responsible organisation" },
     date: { uz: "Sana", ru: "Дата", en: "Date" },
     fingerprint: { uz: "Barmoq izi", ru: "Отпечаток", en: "Fingerprint" },

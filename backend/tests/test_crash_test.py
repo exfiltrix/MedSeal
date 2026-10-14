@@ -121,7 +121,11 @@ def test_crash_test_job(client):
     assert res["protocol_compliant"] is False  # n_images=3 < the passport protocol's minimum of 50
     assert set(res["flip_rate"]) == {"0.5", "1", "2"}  # eps=1 is always added for the score
     assert res["flip_rate"]["2"] == 1.0
-    assert res["robustness_score"] == round(10 * (1 - res["flip_rate"]["1"]), 1)
+    # Both directions (review round 1): the score is set by the worse of the two at eps = 1.
+    reverse = res["flip_rate_reverse"]
+    assert reverse is not None and res["n_images_reverse"] >= 1 and set(reverse) == {"0.5", "1", "2"}
+    worst = max(res["flip_rate"]["1"], reverse["1"])
+    assert res["robustness_score"] == round(10 * (1 - worst), 1)
     assert all(v > 40 for v in res["psnr"].values())
     ex = res["example"]
     assert ex["before_score"] < 0.5 < ex["after_score"]

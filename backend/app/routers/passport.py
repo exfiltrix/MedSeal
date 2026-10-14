@@ -66,8 +66,10 @@ def issue_passport(body: PassportIn, session: Session = Depends(get_session)):
             409,
             "Crash test does not meet the passport protocol "
             f"(need method={report.PROTOCOL['method']!r}, n_images>={report.PROTOCOL['min_images']}, "
-            f"eps includes {report.PROTOCOL['eps_required']}; got method={ct_data.get('method')!r}, "
-            f"n_images={ct_data.get('n_images')}, eps={ct_data.get('eps')})",
+            f"eps includes {report.PROTOCOL['eps_required']}, both directions with "
+            f"n_images_reverse>={report.PROTOCOL['min_images_reverse']}; got method={ct_data.get('method')!r}, "
+            f"n_images={ct_data.get('n_images')}, eps={ct_data.get('eps')}, "
+            f"n_images_reverse={ct_data.get('n_images_reverse', 0)})",
         )
 
     data = report.build(session, m, ct)

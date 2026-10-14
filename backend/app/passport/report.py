@@ -20,13 +20,15 @@ from app.verify.service import DOCTOR_NOTE
 ALLOW_SCORE = 7.0
 SHIELD_MIN_DETECTION = 0.9
 SHIELD_MAX_FALSE_ALARMS = 0.02
-SCORE_FORMULA = "10 × (1 − flip rate at eps = 1 px)"
+SCORE_FORMULA = "10 × (1 − worst flip rate of both directions at eps = 1 px)"
 
 # P1-04: a passport may only be issued from a crash test that actually ran the protocol it
 # claims to certify against — otherwise a cheap FGSM run on a handful of images could pass for
 # the real thing. Torch-free on purpose (this module must not gain a hard torch dependency —
 # passports are issued from a finished DB row, no model load required).
-PROTOCOL = {"method": "pgd", "min_images": 50, "eps_required": [1]}
+# v2 (review round 1): both directions must have been attacked — a test that never tried to hide a
+# finding (sick -> healthy) cannot certify a model, and older one-direction tests must be re-run.
+PROTOCOL = {"method": "pgd", "min_images": 50, "eps_required": [1], "min_images_reverse": 20, "version": 2}
 
 
 def protocol_compliant(result: dict) -> bool:
@@ -34,6 +36,8 @@ def protocol_compliant(result: dict) -> bool:
         result.get("method") == PROTOCOL["method"]
         and result.get("n_images", 0) >= PROTOCOL["min_images"]
         and all(e in result.get("eps", []) for e in PROTOCOL["eps_required"])
+        and result.get("flip_rate_reverse") is not None
+        and result.get("n_images_reverse", 0) >= PROTOCOL["min_images_reverse"]
     )
 
 VERDICTS = ("allowed", "allowed_with_conditions", "not_allowed")
@@ -43,6 +47,10 @@ SEAL_REQUIRED = "seal_required"          # images sealed at capture and verified
 DOCTOR_DECIDES = "doctor_decides"        # model output is advice; the doctor makes the diagnosis
 RETEST_REQUIRED = "retest_required"      # re-run the crash test after retraining (not_allowed)
 CLINICAL_VALIDATION_REQUIRED = "clinical_validation_required"  # research score is not clinical clearance
+# The shield was measured against an attacker who knows it (scripts/adaptive_attack.py) and let too
+# many attacks through unnoticed: "behind the shield" then does not protect against that attacker.
+SHIELD_BYPASSABLE = "shield_bypassable_adaptive"
+ADAPTIVE_MAX_SILENT = 0.1  # worst direction, eps = 1 px
 
 
 def model_json(m: AIModel) -> dict:
@@ -62,6 +70,9 @@ def robustness_block(ct: CrashTest) -> dict:
         "pathology": r["pathology"],
         "data": r.get("data", []),
         "flip_rate": r["flip_rate"],
+        "flip_rate_reverse": r.get("flip_rate_reverse"),
+        "n_images_reverse": r.get("n_images_reverse", 0),
+        "score_basis": r.get("score_basis", "healthy_to_sick"),
         "psnr": r["psnr"],
         "example": r.get("example"),  # before/after pair, base64 PNGs
     }
@@ -73,13 +84,21 @@ def _count_and_interval(rate: float, trials: int, count: int | None = None) -> d
     return {"successes": successes, "n": trials, "lower": round(lower, 6), "upper": round(upper, 6)}
 
 
+def _worst(forward: dict, reverse: dict | None) -> dict:
+    if not reverse or reverse.get("detected") is None:
+        return forward
+    return reverse if reverse["detected"] < (forward.get("detected") or 0) else forward
+
+
 def shield_block() -> dict:
     path = settings.shield_calibration
     if not path.exists():
         return {"available": False, "compatible": False}
     c = json.loads(path.read_text())
-    pgd_entry = c["detection_rate"]["pgd"]["1"]
-    fgsm_entry = c["detection_rate"]["fgsm"]["1"]
+    # Worst direction: a shield that only catches healthy -> sick attacks does not protect against
+    # the more dangerous sick -> healthy one (review round 1; calibrations before it lack this block).
+    pgd_entry = _worst(c["detection_rate"]["pgd"]["1"], (c.get("detection_rate_reverse") or {}).get("pgd", {}).get("1"))
+    fgsm_entry = _worst(c["detection_rate"]["fgsm"]["1"], (c.get("detection_rate_reverse") or {}).get("fgsm", {}).get("1"))
     pgd1 = pgd_entry["detected"]
     fgsm1 = fgsm_entry["detected"]
     n_held_out = int(c["n_held_out"])
@@ -90,6 +109,8 @@ def shield_block() -> dict:
         pgd_entry.get("detected_count"),
     )
     fpr_ci = _count_and_interval(c["false_positive_rate"], n_held_out, fpr_count)
+    adaptive = c.get("adaptive")
+    adaptive_rate = adaptive.get("silent_success_eps1") if adaptive else None
     return {
         "available": True,
         "method": c["method"],
@@ -101,7 +122,10 @@ def shield_block() -> dict:
             "detection_pgd_eps1": detection_ci,
             "false_positive_rate": fpr_ci,
         },
-        "adaptive_attack_tested": False,
+        "directions_tested": 2 if c.get("detection_rate_reverse") else 1,
+        "adaptive_attack_tested": adaptive is not None,
+        "adaptive_silent_success_eps1": adaptive_rate,
+        "bypassable": adaptive_rate is not None and adaptive_rate >= ADAPTIVE_MAX_SILENT,
         "calibrated_on": c["dataset"],
         # AI-01 (decided): the rule stays on point estimates. With the current calibration sample
         # (29/29 PGD detections, 4/450 false alarms) the 95% Clopper-Pearson interval does not yet
@@ -129,6 +153,7 @@ def decide(
     score: float,
     shield_compatible: bool,
     clinical_validation: dict | None = None,
+    shield_bypassable: bool = False,
 ) -> tuple[str, list[str]]:
     """Apply research thresholds; clinical validation is required for `allowed`."""
     validated = clinical_validation is not None
@@ -136,6 +161,8 @@ def decide(
         return "allowed", [SEAL_REQUIRED, DOCTOR_DECIDES]
     if shield_compatible:
         conditions = [SHIELD_REQUIRED, SEAL_REQUIRED, DOCTOR_DECIDES]
+        if shield_bypassable:
+            conditions.insert(1, SHIELD_BYPASSABLE)
         if not validated:
             conditions.insert(0, CLINICAL_VALIDATION_REQUIRED)
         return "allowed_with_conditions", conditions
@@ -153,7 +180,8 @@ def build(session: Session, m: AIModel, ct: CrashTest) -> dict:
     robustness = robustness_block(ct)
     shield = shield_block()
     clinical_validation = json.loads(ct.results_json).get("clinical_validation")
-    verdict, conditions = decide(robustness["score"], shield["compatible"], clinical_validation)
+    verdict, conditions = decide(robustness["score"], shield["compatible"], clinical_validation,
+                                 shield.get("bypassable", False))
     return {
         "model": model_json(m),
         "robustness": robustness,

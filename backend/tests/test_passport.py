@@ -18,6 +18,7 @@ def add_crash_test(model_id: int, score: float | None = 0.2, **overrides) -> int
     results = {
         "n_images": 50, "method": "pgd", "pathology": "Pneumonia", "data": ["nih/normal"],
         "eps": [0.5, 1, 2, 4], "flip_rate": FLIP_RATE, "psnr": dict.fromkeys(FLIP_RATE, 50.0),
+        "n_images_reverse": 30, "flip_rate_reverse": FLIP_RATE, "score_basis": "worst_direction",
         "robustness_score": score,
     }
     results.update(overrides)
@@ -50,6 +51,34 @@ def test_verdict_rules(score, shield_ok, validated, verdict):
     assert got == verdict
     assert (report.SHIELD_REQUIRED in conditions) == (verdict == "allowed_with_conditions")
     assert (report.CLINICAL_VALIDATION_REQUIRED in conditions) == (not validated)
+
+
+def test_bypassable_shield_is_a_named_condition():
+    """A shield that an adaptive attacker gets past must not read as plain protection."""
+    verdict, conditions = report.decide(2.0, True, None, shield_bypassable=True)
+    assert verdict == "allowed_with_conditions"
+    assert report.SHIELD_BYPASSABLE in conditions
+    assert report.SHIELD_BYPASSABLE not in report.decide(2.0, True, None)[1]
+
+
+def test_shield_block_reports_the_adaptive_result(tmp_path, monkeypatch):
+    import json
+
+    from app.config import settings
+
+    c = json.loads(settings.shield_calibration.read_text())
+    c["adaptive"] = {"silent_success_eps1": 0.4}
+    path = tmp_path / "shield.json"
+    path.write_text(json.dumps(c))
+    monkeypatch.setattr(settings, "shield_calibration", path)
+    block = report.shield_block()
+    assert block["adaptive_attack_tested"] is True
+    assert block["adaptive_silent_success_eps1"] == 0.4 and block["bypassable"] is True
+
+    c.pop("adaptive")
+    path.write_text(json.dumps(c))
+    block = report.shield_block()
+    assert block["adaptive_attack_tested"] is False and block["bypassable"] is False
 
 
 def test_robust_but_unvalidated_model_is_not_sent_to_retest():
@@ -197,3 +226,29 @@ def test_old_database_gets_new_columns(tmp_path):
         assert {"organisation", "report_json"} <= cols
     finally:
         db.init_engine()  # rebind to the default URL for other code in this process
+
+
+def test_one_direction_crash_test_cannot_certify(client, model_id):
+    """Protocol v2: a crash test that never tried to hide a finding (sick -> healthy) is refused."""
+    add_crash_test(model_id, flip_rate_reverse=None, n_images_reverse=0)
+    r = client.post("/api/passport", json={"model_id": model_id}, headers=admin_headers())
+    assert r.status_code == 409 and "n_images_reverse" in r.json()["detail"]
+
+
+def test_shield_detection_uses_the_worse_direction(tmp_path, monkeypatch):
+    """Catching healthy -> sick attacks says nothing about hiding a finding (sick -> healthy)."""
+    import json
+
+    from app.config import settings
+
+    c = json.loads(settings.shield_calibration.read_text())
+    c["detection_rate_reverse"] = {
+        "pgd": {"1": {"attacks_that_fooled_model": 30, "detected_count": 16, "detected": 0.533}},
+        "fgsm": {"1": {"attacks_that_fooled_model": 20, "detected_count": 10, "detected": 0.5}},
+    }
+    path = tmp_path / "shield.json"
+    path.write_text(json.dumps(c))
+    monkeypatch.setattr(settings, "shield_calibration", path)
+    block = report.shield_block()
+    assert block["detection_pgd_eps1"] == 0.533 and block["directions_tested"] == 2
+    assert block["compatible"] is False  # 53% < the 90% the rule asks for

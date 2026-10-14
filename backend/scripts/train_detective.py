@@ -46,8 +46,34 @@ def cached(name: str, *dirs) -> np.ndarray:
     return arr
 
 
+def benign(img: np.ndarray, rng) -> np.ndarray:
+    """One routine processing step a hospital applies to real images (review round 1).
+
+    Without it the detective learned "smoothed / re-encoded = forged": CLAHE took its false alarms
+    on real held-out X-rays from 7% to 32% and JPEG q75 to 21%. Applied to real and fake alike,
+    so processing itself is never the clue.
+    """
+    kind = rng.integers(6)
+    if kind == 0:
+        return cv2.createCLAHE(clipLimit=float(rng.uniform(1.0, 3.0)), tileGridSize=(8, 8)).apply(img)
+    if kind == 1:
+        ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, int(rng.integers(70, 96))])
+        return cv2.imdecode(buf, cv2.IMREAD_GRAYSCALE)
+    if kind == 2:
+        f = float(rng.uniform(0.6, 0.95))
+        small = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_AREA)
+        return cv2.resize(small, img.shape[::-1], interpolation=cv2.INTER_LINEAR)
+    if kind == 3:
+        return np.clip(255 * (img / 255.0) ** rng.uniform(0.8, 1.25), 0, 255).astype(np.uint8)
+    if kind == 4:
+        return cv2.GaussianBlur(img, (0, 0), float(rng.uniform(0.3, 0.8)))
+    return cv2.addWeighted(img, 1.5, cv2.GaussianBlur(img, (0, 0), 1.0), -0.5, 0)
+
+
 def jitter(img: np.ndarray, rng) -> np.ndarray:
-    """Same photometric noise for real and fake, so brightness is never the clue."""
+    """Same photometric noise and processing for real and fake, so neither is ever the clue."""
+    if rng.random() < 0.5:
+        img = benign(img, rng)
     out = img.astype(np.float32) * rng.uniform(0.9, 1.1) + rng.uniform(-12, 12)
     if rng.random() < 0.5:
         out = out[:, ::-1]

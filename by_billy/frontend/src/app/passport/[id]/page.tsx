@@ -123,7 +123,14 @@ export default function PassportPage({ params }: { params: Promise<{ id: string 
                         />
                       </>
                     )}
-                    <p className="col-span-full text-xs text-amber-800">{t(d.adaptiveNote)}</p>
+                    {passport.shield.adaptive_attack_tested ? (
+                      <Field
+                        label={t(d.adaptiveResult)}
+                        value={pct(passport.shield.adaptive_silent_success_eps1 ?? null)}
+                      />
+                    ) : (
+                      <p className="col-span-full text-xs text-amber-800">{t(d.adaptiveNote)}</p>
+                    )}
                   </>
                 )}
                 <Field label={t(d.activeDevices)} value={passport.pipeline.devices_active} />
@@ -152,6 +159,20 @@ export default function PassportPage({ params }: { params: Promise<{ id: string 
                       </span>
                     ))}
                 </div>
+                {r.flip_rate_reverse && (
+                  <>
+                    <p className="mt-3 text-xs text-muted">{t(d.reverseTitle)}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {Object.entries(r.flip_rate_reverse)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([eps, v]) => (
+                          <span key={eps} className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs">
+                            eps {eps}: <b>{Math.round(v * 100)}%</b>
+                          </span>
+                        ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
