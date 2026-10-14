@@ -53,6 +53,8 @@ def problems() -> list[str]:
             out.append(f"{len(plaintext)} private key file(s) are stored unencrypted: run python -m scripts.encrypt_keys")
     else:
         out.append(f"MEDSEAL_KEY_BACKEND={settings.key_backend!r}: use 'file' or 'pkcs11'")
+    if settings.inbox_preview_days <= 0:
+        out.append("MEDSEAL_INBOX_PREVIEW_DAYS must be set (> 0): patient image previews must not be kept forever")
     if settings.process_role not in ("all", "api", "worker"):
         out.append(f"MEDSEAL_PROCESS_ROLE={settings.process_role!r}: use 'api' (with python -m app.worker) or 'all'")
     if not settings.require_device_cert:

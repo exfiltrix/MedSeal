@@ -63,6 +63,10 @@ Every seal, verification, key change and anchor is logged (who, when, result) in
 - T4: `backend/tests/test_anchor.py` — an insider re-signs a doctored image with the real device key and repairs the hash chain; only the anchored root catches it (`scripts/rewrite_history_demo.py` for the live demo).
 - T10: instead of timeouts, the decoded size is capped at 64 Mpx from the header, before any pixel is decoded (`MEDSEAL_MAX_PIXELS`) — PNG and DICOM "decompression bombs" get `413`. No request timeout in uvicorn itself.
 - T11: security headers on every response (`nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, CSP `default-src 'none'` on JSON, `Cache-Control: no-store`; HSTS when served over https), per-IP rate limit 120/min on POSTs and on the expensive public GETs (`/ledger/check`, PDFs, QR images) (`MEDSEAL_RATE_LIMIT`, in memory: one backend process), failed tokens audited. Backend roles are bearer tokens (admin, device, doctor, client); the Next.js layer adds one Basic Auth login per area and refuses cross-site state-changing requests (CSRF) — still "basic": no per-person accounts.
+- Patient data at rest: sealed image files (`app/storage.py`) and the doctor's inbox results with their
+  image previews (`automation.inbox`) are AES-256-GCM encrypted with `MEDSEAL_DATA_KEY`, each blob bound to
+  its file name / row id (a swapped file fails to decrypt). Previews older than `MEDSEAL_INBOX_PREVIEW_DAYS`
+  are removed by the worker, verdicts stay. `scripts/encrypt_storage.py` encrypts data stored before this.
 - Transport: the demo runs over plain http on a laptop; TLS 1.3 + HSTS is a reverse-proxy setting in production.
 - T4 (review round 1): deleting `anchors.jsonl` or cutting lines off its head used to switch the
   CRY-03 check off (`ok: true`). Every v2 row is now required to have its anchor line.

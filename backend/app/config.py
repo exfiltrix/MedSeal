@@ -85,6 +85,9 @@ class Settings:
     gateway_name: str = os.environ.get("MEDSEAL_GATEWAY_NAME", "Shlyuz-Auto")
     gateway_hospital: str = os.environ.get("MEDSEAL_GATEWAY_HOSPITAL", "Namangan viloyat shifoxonasi")
     warmup: bool = os.environ.get("MEDSEAL_WARMUP", "1") != "0"
+    # Days the doctor's inbox keeps image previews (patient data) before the worker removes them;
+    # verdicts stay. 0 = keep forever (development only: production requires a value).
+    inbox_preview_days: float = float(os.environ.get("MEDSEAL_INBOX_PREVIEW_DAYS", "0"))
     # Which background loops this process runs (app/main.py, app/worker.py):
     #   all    — everything in one process (development, a single small server)
     #   api    — HTTP only; run `python -m app.worker` separately (several API workers + one worker)

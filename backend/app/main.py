@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import db, hardening, jobs, observability, security
+from app import db, hardening, jobs, observability, security, storage
 from app.config import settings
 from app.db import init_engine
 from app.anchor import chain as anchor_chain, service as anchoring
@@ -13,8 +13,7 @@ from app.seal.recovery import backfill_dhash
 
 
 def _read_sealed_file(row) -> bytes | None:
-    path = settings.storage_dir / row.file_name
-    return path.read_bytes() if path.exists() else None
+    return storage.read_sealed(row.file_name)
 
 
 def prepare() -> None:

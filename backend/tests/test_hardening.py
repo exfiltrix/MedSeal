@@ -27,6 +27,8 @@ def production_ready(monkeypatch, tmp_path):
         "data_key": "k" * 44,
         "key_backend": "file",
         "allow_software_keys": True,
+        "inbox_preview_days": 90,
+        "process_role": "api",
         "keys_dir": tmp_path / "keys",
         "root_key_path": tmp_path / "keys" / "root.pem",
     }.items():
@@ -50,6 +52,8 @@ def production_ready(monkeypatch, tmp_path):
     ("chain_id", 31337, "local development chain"),
     ("allow_software_keys", False, "MEDSEAL_KEY_BACKEND=pkcs11"),
     ("key_backend", "vault", "use 'file' or 'pkcs11'"),
+    ("inbox_preview_days", 0, "MEDSEAL_INBOX_PREVIEW_DAYS"),
+    ("process_role", "everything", "MEDSEAL_PROCESS_ROLE"),
 ])
 def test_each_unsafe_setting_is_named(production_ready, name, value, expected):
     production_ready.setattr(settings, name, value)

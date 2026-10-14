@@ -16,7 +16,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from app import audit, db
+from app import audit, db, storage
 from app.automation import inbox
 from app.automation.public_check import token_for
 from app.config import settings
@@ -118,9 +118,9 @@ def seal_new_scans() -> int:
                 audit.log(session, "seal", f"device:{settings.gateway_name}", target=f"seal:{row.id}",
                           result="sealed", ip="folder")
                 token_for(session, row.id)
-                sealed_file = settings.storage_dir / row.file_name  # with medseal_uid / stripped DICOM tags
+                sealed_name = row.file_name  # with medseal_uid / stripped DICOM tags
             incoming_dir().mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(sealed_file, incoming_dir() / f"{path.stem}{sealed_file.suffix}")
+            (incoming_dir() / f"{path.stem}.{sealed_name.rsplit('.', 1)[-1]}").write_bytes(storage.read_sealed(sealed_name))
             _move_quietly(path, "processed")
             _state["sealed"] += 1
             done += 1

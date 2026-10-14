@@ -122,11 +122,29 @@ def run_one() -> bool:
     return True
 
 
+RETENTION_EVERY_S = 3600
+_last_retention = [0.0]
+
+
+def retention_pass() -> None:
+    """Data retention, at most hourly: inbox image previews past MEDSEAL_INBOX_PREVIEW_DAYS."""
+    from app.automation import inbox
+    from app.config import settings
+
+    t = now().timestamp()
+    if t - _last_retention[0] < RETENTION_EVERY_S:
+        return
+    _last_retention[0] = t
+    with db.SessionLocal() as session:
+        inbox.purge_previews(session, settings.inbox_preview_days)
+
+
 def _loop() -> None:
     while not _stop.is_set():
         try:
             while run_one() and not _stop.is_set():
                 pass
+            retention_pass()
         except Exception:
             log.exception("job loop pass failed")
         _wake.wait(POLL_S)

@@ -2,15 +2,14 @@ import json
 import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app import audit
+from app import audit, storage
 from app.auth import require_device, require_device_or_admin, require_seal_owner
 from app.automation.public_check import token_for
-from app.config import settings
 from app.db import get_session
 from app.models import Device, Seal, iso_utc
 from app.routers.common import read_upload
@@ -68,11 +67,13 @@ def seal_file(seal_id: int, session: Session = Depends(get_session)):
     """The sealed original. Only the device that produced it, or an admin, may read it — any
     device token would be a horizontal IDOR across hospitals (docs/SECURITY.md T-tokens)."""
     row = session.get(Seal, seal_id)
-    if row is None or not (path := settings.storage_dir / row.file_name).exists():
+    content = storage.read_sealed(row.file_name) if row is not None else None
+    if content is None:
         raise HTTPException(404, "Sealed file not found")
-    ext = path.suffix
+    ext = "." + row.file_name.rsplit(".", 1)[-1]
     media = "application/dicom" if ext == ".dcm" else "image/png"
-    return FileResponse(path, media_type=media, filename=f"medseal_seal_{row.id}{ext}")
+    return Response(content, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="medseal_seal_{row.id}{ext}"'})
 
 
 @router.get("/seals", dependencies=[Depends(require_device_or_admin)])

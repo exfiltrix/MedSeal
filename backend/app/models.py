@@ -167,6 +167,8 @@ class InboxItem(Base):
     # ~100 KB base64 preview per row) just to read four scalars.
     summary_json: Mapped[str] = mapped_column(Text, default="{}")
     reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # When the stored image preview was removed by the retention policy (automation.inbox.purge_previews).
+    preview_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 

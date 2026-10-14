@@ -5,7 +5,6 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.imaging import (
     META_VERSION,
     LoadedImage,
@@ -19,6 +18,7 @@ from app.imaging import (
     to_grayscale,
 )
 from app.models import Device, Seal, utcnow
+from app import storage
 from app.seal import anchors, core, keys, ledger, recovery, signing
 
 
@@ -84,8 +84,7 @@ def seal_upload(session: Session, image: LoadedImage, device_id: int) -> tuple[S
     record = {"uid": uid, "tile": tile, "leaves": leaves, "root": root, "sig": signature}
 
     file_name = f"{uuid.uuid4().hex}.{ext}"
-    settings.storage_dir.mkdir(parents=True, exist_ok=True)
-    (settings.storage_dir / file_name).write_bytes(content)
+    storage.write_sealed(file_name, content)  # encrypted at rest (patient data)
 
     row = Seal(
         uid=uid,

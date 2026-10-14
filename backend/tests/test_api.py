@@ -576,7 +576,9 @@ def test_dhash_backfill_does_not_affect_the_ledger(client, device, tmp_path):
         s.commit()
 
         def read_file(r):
-            return (tmp_path / "storage" / r.file_name).read_bytes()
+            from app import storage
+
+            return storage.read_sealed(r.file_name)  # files are encrypted at rest
 
         updated = backfill_dhash(s, read_file)
         assert updated == 1

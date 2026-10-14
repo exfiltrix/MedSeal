@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app import audit, secretbox
 from app.imaging import ImageError, load_image
 from app.models import InboxItem, iso_utc, utcnow
 from app.verify.service import verify_upload
@@ -127,7 +128,7 @@ def process(session: Session, data: bytes, file_name: str, source: str) -> Inbox
     item.severity = severity
     item.state = state
     item.reasons_json = json.dumps(reasons)
-    item.result_json = json.dumps(result)
+    store_result(item, result)
     item.summary_json = json.dumps(_summarize(result))
     session.commit()
     return item
@@ -137,8 +138,7 @@ def summary(item: InboxItem) -> dict:
     stored = json.loads(item.summary_json) if item.summary_json and item.summary_json != "{}" else None
     if stored is None:
         # Rows written before summary_json existed: fall back to the full result, once per row.
-        result = json.loads(item.result_json) if item.result_json else {}
-        stored = _summarize(result)
+        stored = _summarize(load_result(item))
     return {
         "id": item.id,
         "file_name": item.file_name,
@@ -158,7 +158,50 @@ def summary(item: InboxItem) -> dict:
 
 
 def detail(item: InboxItem) -> dict:
-    return summary(item) | {"result": json.loads(item.result_json or "{}")}
+    return summary(item) | {"result": load_result(item)}
+
+
+# --- patient data at rest ----------------------------------------------------------------------
+# result_json holds the full /verify answer, including a rendered preview of the patient's image:
+# it is stored encrypted (app/secretbox.py, bound to the row id), and the preview is dropped after
+# MEDSEAL_INBOX_PREVIEW_DAYS (the verdict, reasons and summary stay: they are the medical record).
+ENC_PREFIX = "enc1:"
+IMAGE_KEYS = ("preview_png", "heatmap_png")
+
+
+def _aad(item: InboxItem) -> bytes:
+    return f"inbox-result:{item.id}".encode()
+
+
+def store_result(item: InboxItem, result: dict) -> None:
+    item.result_json = ENC_PREFIX + secretbox.encrypt_text(json.dumps(result), _aad(item))
+
+
+def load_result(item: InboxItem) -> dict:
+    raw = item.result_json or "{}"
+    if raw.startswith(ENC_PREFIX):
+        raw = secretbox.decrypt_text(raw[len(ENC_PREFIX):], _aad(item))
+    return json.loads(raw)
+
+
+def purge_previews(session: Session, days: float) -> int:
+    """Drop the stored image previews of items older than `days`; -> how many were purged."""
+    if days <= 0:
+        return 0
+    cutoff = utcnow() - timedelta(days=days)
+    purged = 0
+    for item in session.scalars(select(InboxItem).where(InboxItem.received_at < cutoff,
+                                                        InboxItem.preview_purged_at.is_(None))):
+        result = load_result(item)
+        for key in IMAGE_KEYS:
+            result.pop(key, None)
+        store_result(item, result)
+        item.preview_purged_at = utcnow()
+        purged += 1
+    if purged:
+        audit.log(session, "inbox_retention", "scheduler", result=f"previews purged: {purged}")
+    session.commit()
+    return purged
 
 
 def _volume(session: Session) -> dict:

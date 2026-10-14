@@ -242,7 +242,7 @@ def test_listing_no_longer_parses_the_stored_preview(client):
     client.post("/api/inbox", files={"files": ("big.png", body)}, headers=doctor_headers())
     with SessionLocal() as s:
         row = s.scalar(select(Model))
-        assert len(json.loads(row.result_json)["preview_png"]) > 1000
+        assert len(inbox_mod.load_result(row)["preview_png"]) > 1000  # stored encrypted (app/secretbox.py)
         assert set(json.loads(row.summary_json)) == {"device", "changed_tiles", "detective_probability", "risk", "error"}
 
 
