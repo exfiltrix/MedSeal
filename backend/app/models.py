@@ -233,6 +233,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     mfa_secret_enc: Mapped[str] = mapped_column(Text, default="")  # secretbox(base32 TOTP secret)
+    # Last accepted TOTP time step: a code is single-use, even inside its 30 s window (replay).
+    mfa_last_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

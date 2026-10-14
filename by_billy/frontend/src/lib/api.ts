@@ -80,13 +80,39 @@ const post = <T>(path: string, body: unknown) =>
     body: body instanceof FormData ? body : JSON.stringify(body),
   });
 
-// Same-origin Next.js route handler (src/app/api/**), not the backend directly: the bearer token
-// that authorizes the call (doctor / client) is a server-only secret, same reasoning as seal().
+// A protected call answered "not signed in" or "change your password first": take the person
+// there and back (src/proxy.ts and the backend decide; this only follows). -> true if navigating.
+export function redirectForAuth(e: unknown): boolean {
+  if (!(e instanceof ApiError) || typeof window === "undefined") return false;
+  const here = window.location.pathname + window.location.search;
+  if (e.status === 401) {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload on purpose: no data of the previous session may stay in memory
+    window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+    return true;
+  }
+  if (e.status === 403 && /password change required/i.test(e.message)) {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload on purpose: no data of the previous session may stay in memory
+    window.location.assign(`/account?next=${encodeURIComponent(here)}`);
+    return true;
+  }
+  return false;
+}
+
+async function throwIfNotOk(res: Response): Promise<string> {
+  const text = await res.text();
+  if (!res.ok) {
+    const error = new ApiError(res.status, detailOf(text) || res.statusText);
+    redirectForAuth(error);
+    throw error;
+  }
+  return text;
+}
+
+// Same-origin Next.js route handler (src/app/api/**), not the backend directly: it forwards the
+// signed-in user's session (an httpOnly cookie the page cannot read) as the bearer token.
 async function viaProxy<T>(path: string, init?: RequestInit): Promise<T> {
   ensureBackendConfigured();
-  const res = await fetch(path, init);
-  const text = await res.text();
-  if (!res.ok) throw new ApiError(res.status, detailOf(text) || res.statusText);
+  const text = await throwIfNotOk(await fetch(path, init));
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
@@ -112,17 +138,13 @@ export function pngSrc(b64OrUrl: string): string {
 }
 
 const realApi = {
-  // Goes through the Next.js route handler (src/app/api/seal/route.ts), not the backend
-  // directly: the device token that authorizes sealing is a server-only secret (P0-1).
+  // Goes through the Next.js route handler (src/app/api/seal/route.ts): the device token that
+  // authorizes sealing is a server-only secret, used only for a signed-in operator or admin.
   seal: (file: File) => {
     ensureBackendConfigured();
     const form = new FormData();
     form.append("file", file);
-    return fetch("/api/seal", { method: "POST", body: form }).then(async (res) => {
-      const text = await res.text();
-      if (!res.ok) throw new ApiError(res.status, detailOf(text) || res.statusText);
-      return JSON.parse(text) as SealResponse;
-    });
+    return viaProxy<SealResponse>("/api/seal", { method: "POST", body: form });
   },
 
   verify: (file: File) => {
@@ -132,8 +154,7 @@ const realApi = {
   },
 
   // Doctor's inbox: images are verified automatically, most urgent first. Goes through the
-  // Next.js route handlers (src/app/api/inbox/**), not the backend directly — the doctor's
-  // bearer token is a server-only secret (MEDSEAL_DOCTOR_TOKEN), same reasoning as seal() above.
+  // Next.js route handlers (src/app/api/inbox/**) with the signed-in doctor's own session.
   uploadToInbox: (files: File[]) => {
     ensureBackendConfigured();
     const form = new FormData();
@@ -156,11 +177,11 @@ const realApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
     });
-    if (!res.ok) throw new ApiError(res.status, detailOf(await res.text()) || res.statusText);
+    if (!res.ok) await throwIfNotOk(res);
     return URL.createObjectURL(await res.blob());
   },
 
-  // Client (hospital/clinic) cabinet: strictly scoped server-side by MEDSEAL_CLIENT_TOKEN.
+  // Client (hospital/clinic) cabinet: the backend scopes it to the signed-in client's hospital.
   getClientDevices: () => viaProxy<ClientDevice[]>("/api/client/devices"),
   getClientStats: () => viaProxy<ClientStats>("/api/client/stats"),
   getClientAlerts: (limit = 50) => viaProxy<ClientAlert[]>(`/api/client/alerts?limit=${limit}`),
@@ -177,31 +198,25 @@ const realApi = {
     `${API_BASE_URL}/check/${encodeURIComponent(token)}/qr.png?url=${encodeURIComponent(pageUrl)}`,
 
   getModels: () => request<AiModel[]>("/models"),
-  // Admin actions (P1-04) go through Next.js route handlers that add the admin token
-  // server-side, same reasoning as seal() above — never a bearer token in the browser.
+  // Admin actions (P1-04) go through Next.js route handlers with the signed-in admin's session;
+  // the backend refuses anyone else.
   startCrashTest: (body: CrashTestRequest) => {
     ensureBackendConfigured();
-    return fetch("/api/crash-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(
-      async (res) => {
-        const text = await res.text();
-        if (!res.ok) throw new ApiError(res.status, detailOf(text) || res.statusText);
-        return JSON.parse(text) as { job_id: number };
-      }
-    );
+    return viaProxy<{ job_id: number }>("/api/crash-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   },
 
   getCrashTest: (jobId: number) => request<CrashTestJob>(`/crash-test/${jobId}`),
 
   createPassport: (modelId: number, crashTestId: number) => {
     ensureBackendConfigured();
-    return fetch("/api/passport", {
+    return viaProxy<Passport>("/api/passport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model_id: modelId, crash_test_id: crashTestId }),
-    }).then(async (res) => {
-      const text = await res.text();
-      if (!res.ok) throw new ApiError(res.status, detailOf(text) || res.statusText);
-      return JSON.parse(text) as Passport;
     });
   },
   getPassport: (id: number) => request<Passport>(`/passport/${id}`),

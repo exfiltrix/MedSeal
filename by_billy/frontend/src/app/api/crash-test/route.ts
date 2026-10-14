@@ -1,29 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
+import { NextRequest } from "next/server";
+import { proxyAsUser } from "@/lib/session";
 
-// Server-only: starting a crash test is an admin action (P1-04). MEDSEAL_ADMIN_TOKEN never
-// reaches the browser; src/proxy.ts + checkStaffAuth below gate this route with the
-// operator's own Basic Auth credentials first (P1-01, defence in depth).
-const BACKEND_URL = (process.env.MEDSEAL_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
-
+// Starting a crash test is an admin action: the backend checks the signed-in user's role.
 export async function POST(req: NextRequest) {
-  const auth = checkStaffAuth(req, "admin");
-  if (!auth.ok) return unauthorizedResponse(auth);
-
-  const token = process.env.MEDSEAL_ADMIN_TOKEN;
-  if (!BACKEND_URL || !token) {
-    return NextResponse.json(
-      { detail: "Admin gateway is not configured: set MEDSEAL_BACKEND_URL and MEDSEAL_ADMIN_TOKEN in .env.local" },
-      { status: 503 }
-    );
-  }
-
-  const body = await req.text();
-  const res = await fetch(`${BACKEND_URL}/crash-test`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body,
-  });
-  const text = await res.text();
-  return new NextResponse(text, { status: res.status, headers: { "Content-Type": "application/json" } });
+  return proxyAsUser(req, "/crash-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: await req.text() });
 }

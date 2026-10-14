@@ -4,8 +4,8 @@
 "A healthy person was told they have cancer — because of one fake image. In 2026 the journal *Radiology* showed: when not warned, only 41% of radiologists noticed AI-generated X-rays."
 
 ## 1. Seal (30 s)
-Open `/seal` → the browser asks for the gateway's Basic Auth credentials first (enter them once
-before the demo, or have them ready — this is the whole point of the next line) → upload a real
+Sign in at `/login` as an operator (personal account; every action is logged under that name) →
+open `/seal` → upload a real
 chest X-ray → "Muhrlandi" + seal ID.
 Say: "In a hospital this login prompt doesn't exist — sealing happens automatically on a box next
 to the scanner. Here it stands in for that box, so only the gateway can seal."
@@ -58,7 +58,7 @@ Growth: pilot hospital → all regions → Central Asia.
 |---|---|
 | Where is the AI? | Detective (gives an experimental tampering probability for images without a seal), crash test (measures robustness against attacks), and shield (raises a warning for likely adversarial noise). The seal is a cryptographic integrity check; it is not a clinical diagnosis or a claim that the AI cannot be fooled. |
 | What if someone deletes the image ID? | Verification searches same-shape/dtype records by a non-signed dHash and then requires at least half of the original tiles to match. A partial derivative is reported as tampered with `seal_id_removed`; an identical re-save is reported as authentic with a warning. In production, add indexed candidate search and rate limits. |
-| Who can seal? | In this demo, the `/seal` page and its server-side gateway routes require HTTP Basic Auth, and the backend still requires a per-device bearer token. Production would put the signing key in a gateway/HSM next to the scanner and expose no browser form. |
+| Who can seal? | Only a signed-in operator or admin (personal account) can use `/seal`, and the backend still requires a per-device bearer token. Production would put the signing key in a gateway/HSM next to the scanner and expose no browser form. |
 | What if the server is hacked? | Today the demo root key is on the same host and a database write can still be dangerous; device certificates and external anchors detect more tampering, but this is not an HSM deployment. Production should keep the root key offline/HSM, use least-privilege services, and alert on anchor/device-certificate failures. |
 | Is the shield robust to an attacker who knows about it? | No, and we measured it: an attacker who optimises against the shield (`scripts/adaptive_attack.py`) gets 63–90% of attacks through at eps 1. The passport shows that number and the condition "shield bypassable by an adaptive attack". That is why the seal, not the shield, is the guarantee; the shield is a warning. |
 | What if the key is stolen? | Keys live only in the gateway (hardware module in production), can be revoked and rotated. |

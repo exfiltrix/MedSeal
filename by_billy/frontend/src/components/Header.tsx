@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useLanguage } from "@/lib/language-context";
 import dictionary from "@/lib/dictionary";
 import { api } from "@/lib/api";
+import { sessionApi, type Me } from "@/lib/sessionApi";
 import LanguageSwitch from "./LanguageSwitch";
 import AccessibilityPanel from "./AccessibilityPanel";
 import { ChartIcon, CrashTestIcon, InboxIcon, PassportIcon, PriceTagIcon, SealIcon, VerifyIcon } from "./icons";
@@ -20,30 +21,22 @@ const LINKS = [
   { href: "/pricing", key: "pricing", icon: PriceTagIcon },
 ] as const;
 
-// The inbox lives behind Basic Auth (src/proxy.ts): polling it from every page, including the
-// public /check/[token] page, would pop up the browser's native credential prompt for a patient
-// who never asked for it. So the badge only starts polling once InboxPage itself has confirmed a
-// doctor session in this tab (see its setDoctorSession() call) — never before.
-const SESSION_KEY = "medseal-doctor-session";
-
-export function setDoctorSession() {
-  try {
-    sessionStorage.setItem(SESSION_KEY, "1");
-  } catch {
-    // storage blocked (private mode, etc.) — the badge simply never activates, which is safe
-  }
+// The signed-in person, if any (src/lib/sessionApi.ts). The cookie is httpOnly, so asking the
+// server is the only way to know; a 401 simply means "not signed in" and is not an error here.
+function useMe(): Me | null {
+  const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => {
+    sessionApi.me().then(setMe).catch(() => setMe(null));
+  }, []);
+  return me;
 }
 
-function useUnreadCount(pathname: string): number | null {
+// Unread-alert badge: only for someone who can read the inbox, so no other page ever polls it.
+function useUnreadCount(pathname: string, me: Me | null): number | null {
   const [count, setCount] = useState<number | null>(null);
+  const canRead = !!me && !me.must_change_password && (me.role === "doctor" || me.role === "admin");
   useEffect(() => {
-    let hasSession = false;
-    try {
-      hasSession = sessionStorage.getItem(SESSION_KEY) === "1";
-    } catch {
-      hasSession = false;
-    }
-    if (!hasSession) return;
+    if (!canRead) return;
     let cancelled = false;
     const poll = () => {
       api
@@ -59,14 +52,20 @@ function useUnreadCount(pathname: string): number | null {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [pathname]);
+  }, [pathname, canRead]);
   return count;
 }
 
 export default function Header() {
   const { t } = useLanguage();
   const pathname = usePathname();
-  const unread = useUnreadCount(pathname);
+  const me = useMe();
+  const unread = useUnreadCount(pathname, me);
+  const signOut = async () => {
+    await sessionApi.logout().catch(() => undefined);
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload on purpose: no data of the previous session may stay in memory
+    window.location.assign("/login");
+  };
   const isActive = (l: (typeof LINKS)[number]) =>
     ("match" in l ? l.match : [l.href]).some((p) => pathname.startsWith(p));
   const linkClass = (active: boolean) =>
@@ -108,6 +107,25 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <AccessibilityPanel />
           <LanguageSwitch />
+          {me ? (
+            <div className="flex items-center gap-1 text-sm">
+              {me.role === "admin" && (
+                <Link href="/admin/users" className="rounded-full px-3 py-1.5 font-medium hover:bg-white/70">
+                  {t(dictionary.nav.admin)}
+                </Link>
+              )}
+              <Link href="/account" className="rounded-full px-3 py-1.5 font-medium hover:bg-white/70" title={t(dictionary.nav.account)}>
+                {me.username}
+              </Link>
+              <button onClick={signOut} className="rounded-full px-3 py-1.5 text-muted hover:bg-white/70 hover:text-foreground">
+                {t(dictionary.nav.signOut)}
+              </button>
+            </div>
+          ) : (
+            <Link href="/login" className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-white">
+              {t(dictionary.nav.signIn)}
+            </Link>
+          )}
         </div>
       </div>
 

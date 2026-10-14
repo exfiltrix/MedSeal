@@ -1,24 +1,12 @@
 import { NextRequest } from "next/server";
-import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
-import { BACKEND_URL, forward, notConfigured } from "@/lib/serverProxy";
+import { proxyAsUser } from "@/lib/session";
 
-// Server-only: the doctor's inbox holds real medical images (docs/SECURITY.md T11) and must never
-// be reachable without the doctor's bearer token, which stays server-side (MEDSEAL_DOCTOR_TOKEN).
-// src/proxy.ts gates this route with the same Basic Auth as the gateway simulator first; this
-// handler re-checks independently (defence in depth, same reasoning as src/app/api/seal/route.ts).
+// The doctor's inbox, with the signed-in user's own session (src/lib/session.ts); the backend
+// decides whether that user may see it (doctor or admin role).
 export async function GET(req: NextRequest) {
-  const auth = checkStaffAuth(req, "doctor");
-  if (!auth.ok) return unauthorizedResponse(auth);
-  const token = process.env.MEDSEAL_DOCTOR_TOKEN;
-  if (!BACKEND_URL || !token) return notConfigured("MEDSEAL_DOCTOR_TOKEN");
-  return forward(`/inbox${req.nextUrl.search}`, token, { cache: "no-store" });
+  return proxyAsUser(req, `/inbox${req.nextUrl.search}`);
 }
 
 export async function POST(req: NextRequest) {
-  const auth = checkStaffAuth(req, "doctor");
-  if (!auth.ok) return unauthorizedResponse(auth);
-  const token = process.env.MEDSEAL_DOCTOR_TOKEN;
-  if (!BACKEND_URL || !token) return notConfigured("MEDSEAL_DOCTOR_TOKEN");
-  const form = await req.formData();
-  return forward("/inbox", token, { method: "POST", body: form });
+  return proxyAsUser(req, "/inbox", { method: "POST", body: await req.formData() });
 }

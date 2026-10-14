@@ -788,3 +788,14 @@ def test_concurrent_seals_from_several_processes_keep_the_ledger_intact(client, 
     assert all(r.status_code == 200 for r in responses), [r.text for r in responses if r.status_code != 200]
     result = client.get("/api/ledger/check").json()
     assert result["ok"] is True and result["entries"] == 12 and result["broken"] == []
+
+
+def test_web_sealing_names_the_operator_in_the_audit(client, device):
+    """The site seals with the gateway's device token on behalf of a signed-in operator."""
+    r = client.post("/api/seal", files={"file": ("x.png", xray_png(seed=500))},
+                    headers=device["auth"] | {"X-MedSeal-Operator": "aziza"})
+    assert r.status_code == 200
+    client.post("/api/seal", files={"file": ("x.png", xray_png(seed=501))},
+                headers=device["auth"] | {"X-MedSeal-Operator": "bad name\r\n"})
+    actors = [e["actor"] for e in client.get("/api/audit?action=seal", headers=admin_headers()).json()]
+    assert "device:KT-01 via user:aziza" in actors and "device:KT-01" in actors

@@ -72,16 +72,25 @@ print(v if not isinstance(v, (dict, list)) else json.dumps(v))
 verify() {  # verify <file>: POST /verify, answer in $WORK/verify.json
   VERIFY_CODE=$(curl -s -o "$WORK/verify.json" -w '%{http_code}' -m 300 -F "file=@$1" "$BACKEND/verify")
 }
-has_basic_challenge() { printf '%s' "$1" | tr -d '\r' | grep -qi '^www-authenticate:[[:space:]]*Basic'; }
-
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/medseal-e2e.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
-GATEWAY_USER=${MEDSEAL_GATEWAY_USER:-$(env_local MEDSEAL_GATEWAY_USER)}
-GATEWAY_PASS=${MEDSEAL_GATEWAY_PASSWORD:-$(env_local MEDSEAL_GATEWAY_PASSWORD)}
+# Personal sign-in (production): an ADMIN account runs the checks (sealing needs operator or admin,
+# the crash test and the passport need admin). Admins have TOTP: give the base32 secret from the
+# account's enrolment URI and the code is computed here. Nothing is read from .env.local any more.
+E2E_USER=${MEDSEAL_E2E_USER:-}
+E2E_PASS=${MEDSEAL_E2E_PASSWORD:-}
+E2E_TOTP_SECRET=${MEDSEAL_E2E_TOTP_SECRET:-}
 DEVICE_TOKEN=${MEDSEAL_DEVICE_TOKEN:-$(env_local MEDSEAL_DEVICE_TOKEN)}
-AUTH_OK=(-u "$GATEWAY_USER:$GATEWAY_PASS")
-AUTH_BAD=(-u "$GATEWAY_USER:not-the-configured-password")
+JAR="$WORK/cookies"
+AUTH_OK=(-b "$JAR" -H "Origin: $FRONTEND")
+AUTH_BAD=(-H "Cookie: medseal_session=not-a-session" -H "Origin: $FRONTEND")
+sign_in() {  # sign_in <password> -> HTTP code; stores the session cookie in $JAR
+  local totp=""
+  [ -n "$E2E_TOTP_SECRET" ] && totp=$("$PYTHON" -c 'import pyotp,sys; print(pyotp.TOTP(sys.argv[1]).now())' "$E2E_TOTP_SECRET")
+  curl -s -o "$WORK/login.json" -w '%{http_code}' -m 30 -c "$JAR" -H "Origin: $FRONTEND" -H 'Content-Type: application/json' \
+    -d "{\"username\": \"$E2E_USER\", \"password\": \"$1\", \"totp\": \"$totp\"}" "$FRONTEND/api/session/login"
+}
 
 printf '\033[1mMedSeal live end-to-end check\033[0m\n'
 printf 'backend  : %s\nfrontend : %s\npython   : %s\nworkdir  : %s\n' "$BACKEND" "$FRONTEND" "$PYTHON" "$WORK"
@@ -95,10 +104,10 @@ if [ -x "$PYTHON" ]; then pass "backend virtualenv python found"; else
 fi
 check "GET $BACKEND/health" "200" "$(code "$BACKEND/health")"
 check "GET $FRONTEND/ (home page)" "200" "$(code "$FRONTEND/")"
-if [ -n "$GATEWAY_USER" ] && [ -n "$GATEWAY_PASS" ]; then
-  pass "gateway credentials found in $(basename "$ENV_LOCAL")"
+if [ -n "$E2E_USER" ] && [ -n "$E2E_PASS" ]; then
+  pass "sign-in account given (MEDSEAL_E2E_USER)"
 else
-  fail "MEDSEAL_GATEWAY_USER/PASSWORD are not set (and not found in $ENV_LOCAL)"
+  fail "MEDSEAL_E2E_USER / MEDSEAL_E2E_PASSWORD (+ MEDSEAL_E2E_TOTP_SECRET for an admin) are not set"
 fi
 if [ -n "$DEVICE_TOKEN" ]; then
   pass "gateway device token found in $(basename "$ENV_LOCAL")"
@@ -109,21 +118,16 @@ if [ -f "$SAMPLES/$SAMPLE" ]; then pass "sample $SAMPLE present"; else
   fail "sample $SAMPLES/$SAMPLE missing - run python -m scripts.fetch_samples"
 fi
 
-# ---------------------------------------------------------------- a. gateway auth (P1-01)
-say "a. Gateway HTTP Basic Auth: /seal and /api/seal"
+# ---------------------------------------------------------------- a. personal sign-in
+say "a. Sign-in: protected pages and routes need a personal session"
 H=$(curl -s -D - -o /dev/null -m 30 "$FRONTEND/seal")
-check "GET /seal without credentials" "401" "$(printf '%s' "$H" | head -1 | awk '{print $2}')"
-if has_basic_challenge "$H"; then pass "GET /seal sends 'WWW-Authenticate: Basic'"; else
-  fail "GET /seal without credentials did not send a WWW-Authenticate: Basic header"
-fi
-H=$(curl -s -D - -o /dev/null -m 30 -X POST "$FRONTEND/api/seal")
-check "POST /api/seal without credentials" "401" "$(printf '%s' "$H" | head -1 | awk '{print $2}')"
-if has_basic_challenge "$H"; then pass "POST /api/seal sends 'WWW-Authenticate: Basic'"; else
-  fail "POST /api/seal without credentials did not send a WWW-Authenticate: Basic header"
-fi
-check "GET /seal with a wrong password" "401" "$(code "${AUTH_BAD[@]}" "$FRONTEND/seal")"
-check "POST /api/seal with a wrong password" "401" "$(code "${AUTH_BAD[@]}" -X POST "$FRONTEND/api/seal")"
-check "GET /seal with the right credentials" "200" "$(code "${AUTH_OK[@]}" "$FRONTEND/seal")"
+check "GET /seal without a session -> redirect to /login" "307" "$(printf '%s' "$H" | head -1 | awk '{print $2}')"
+check "POST /api/seal without a session" "401" "$(code -X POST -H "Origin: $FRONTEND" "$FRONTEND/api/seal")"
+check "POST /api/seal with a forged session cookie" "401" "$(code "${AUTH_BAD[@]}" -X POST "$FRONTEND/api/seal")"
+check "sign-in with a wrong password" "401" "$(sign_in 'not-the-password')"
+check "sign-in with the right credentials" "200" "$(sign_in "$E2E_PASS")"
+check "GET /seal with the session" "200" "$(code "${AUTH_OK[@]}" "$FRONTEND/seal")"
+check "POST from another site is refused (CSRF)" "403" "$(code -b "$JAR" -H 'Origin: https://evil.example' -X POST "$FRONTEND/api/seal")"
 
 # ---------------------------------------------------------------- b. seal -> download -> verify
 say "b. Seal a real X-ray through :3000, download it, verify it on the backend"

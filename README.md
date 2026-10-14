@@ -143,8 +143,9 @@ Or everything for the demo in one command — local blockchain + contract + back
 ```bash
 cd by_billy/frontend
 npm install
-cp .env.example .env.local   # fill in MEDSEAL_DEVICE_TOKEN (from create_demo_device above),
-                              # MEDSEAL_ADMIN_TOKEN, MEDSEAL_GATEWAY_USER/PASSWORD
+cp .env.example .env.local   # fill in MEDSEAL_DEVICE_TOKEN (from create_demo_device above)
+# people sign in at /login with personal accounts; the first admin (backend/):
+#   .venv/bin/python -m scripts.create_user --username admin --role admin
 npm run dev                  # http://localhost:3000  (development)
 ```
 
@@ -159,8 +160,8 @@ npm run build && npm run start   # http://localhost:3000
 `http://<your-lan-ip>:3000` (`ipconfig getifaddr en0`). The backend must allow that origin:
 `MEDSEAL_CORS_ORIGIN_REGEX` already covers private `10./172.16-31./192.168.` addresses on port 3000.
 
-Without a `MEDSEAL_GATEWAY_USER`/`PASSWORD`, the `/seal` page and its gateway API routes refuse
-every request with `503` (fail closed, P1-01) rather than opening up. Without
+Protected pages (`/seal`, `/inbox`, `/client`, `/account`, `/admin`) send anyone without a session
+to `/login`; their API routes answer `401`. Without
 `NEXT_PUBLIC_API_URL` and without `NEXT_PUBLIC_USE_MOCK=1`, API calls fail with an explicit
 "backend is not configured" error instead of silently showing demo data.
 
@@ -233,8 +234,7 @@ Frontend (`by_billy/frontend/.env.local`, see `.env.example`):
 | `MEDSEAL_BACKEND_URL` | server-only backend URL used by the Next.js route handlers |
 | `MEDSEAL_DEVICE_TOKEN` | server-only device token, never sent to the browser |
 | `MEDSEAL_ADMIN_TOKEN` | server-only admin token for the crash-test/passport route handlers |
-| `MEDSEAL_GATEWAY_USER` / `MEDSEAL_GATEWAY_PASSWORD` | HTTP Basic Auth in front of `/seal` and the gateway API routes |
-| `MEDSEAL_DOCTOR_USER/PASSWORD`, `MEDSEAL_CLIENT_USER/PASSWORD`, `MEDSEAL_ADMIN_USER/PASSWORD` | a separate login for the inbox, the client cabinet and the admin routes (crash test, passport); an unset pair falls back to the gateway login. State-changing requests from another site are refused (`403`, CSRF) |
+| (no shared logins) | people sign in with personal accounts at `/login`: httpOnly + Secure + SameSite=Strict session cookie, roles decided by the backend; cross-site state-changing requests get `403` (CSRF) |
 
 ## Tests
 
@@ -275,9 +275,10 @@ cd by_billy/frontend && npm run build && npm run start
 cd backend && bash scripts/e2e_live.sh      # prints PASS/FAIL per check, exits non-zero on any FAIL
 ```
 
-It reads the gateway credentials and the device token from `by_billy/frontend/.env.local`; every
-value can be overridden through the environment (`MEDSEAL_GATEWAY_USER`, `MEDSEAL_GATEWAY_PASSWORD`,
-`MEDSEAL_DEVICE_TOKEN`, `MEDSEAL_BACKEND_URL`, `MEDSEAL_FRONTEND_URL`). Check (e) runs a real
+It signs in through the site as an admin account (`MEDSEAL_E2E_USER`, `MEDSEAL_E2E_PASSWORD`,
+`MEDSEAL_E2E_TOTP_SECRET` — the base32 secret of its enrolment URI) and reads the device token from
+`by_billy/frontend/.env.local`; `MEDSEAL_DEVICE_TOKEN`, `MEDSEAL_BACKEND_URL`, `MEDSEAL_FRONTEND_URL`
+override. Check (e) runs a real
 50-image PGD crash test, so allow it a few minutes (`MEDSEAL_E2E_CRASH_TIMEOUT`, default 1800 s).
 
 ## Troubleshooting

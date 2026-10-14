@@ -118,8 +118,7 @@ def login(session: Session, username: str, password: str, totp: str | None, ip: 
     except (VerificationError, InvalidHashError):
         ok = False
     if ok and (user.role in MFA_ROLES or user.mfa_secret_enc):
-        secret = mfa_secret(user)
-        ok = bool(secret and totp and pyotp.TOTP(secret).verify(totp.strip(), valid_window=1))
+        ok = _accept_totp(user, totp)
     if not ok:
         user.failed_logins += 1
         if user.failed_logins >= settings.login_max_failures:
@@ -136,6 +135,22 @@ def login(session: Session, username: str, password: str, totp: str | None, ip: 
                       expires_at=t + timedelta(hours=settings.session_hours), ip=ip)
     session.add(row)
     return LoginResult(token, user, row)
+
+
+def _accept_totp(user: User, code: str | None) -> bool:
+    """Valid for the current step or one either side (clock drift), and never a step already used:
+    an observed or phished code cannot be replayed within its window."""
+    secret = mfa_secret(user)
+    if not secret or not code:
+        return False
+    totp, t = pyotp.TOTP(secret), now()
+    for offset in (-1, 0, 1):
+        at = t + timedelta(seconds=offset * totp.interval)
+        step = totp.timecode(at)
+        if step > (user.mfa_last_step or 0) and secrets.compare_digest(totp.at(at), code.strip()):
+            user.mfa_last_step = step
+            return True
+    return False
 
 
 def token_hash(token: str) -> str:

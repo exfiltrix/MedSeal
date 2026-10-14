@@ -37,18 +37,15 @@ there is no `device_id` field anymore (a client can no longer seal as an arbitra
 - The frontend never talks to this endpoint directly: `by_billy/frontend/src/app/api/seal/route.ts` is a Next.js
   route handler that adds the token server-side from `MEDSEAL_DEVICE_TOKEN` (see `by_billy/frontend/.env.example`).
 
-### Changed in audit remediation (P1-01): the gateway simulator requires Basic Auth
-`/seal` (the page) and `/api/seal`, `/api/crash-test`, `/api/passport` (the Next.js route handlers) require
-`Authorization: Basic <base64(user:password)>`, checked in `by_billy/frontend/src/proxy.ts` (first) and again inside
-each route handler (`by_billy/frontend/src/lib/gatewayAuth.ts`, defence in depth). Credentials come from server-only
-env vars, one pair per area: `MEDSEAL_GATEWAY_*` (seal), `MEDSEAL_DOCTOR_*` (inbox, automation), `MEDSEAL_CLIENT_*`
-(client cabinet), `MEDSEAL_ADMIN_*` (crash test, passport) — `_USER` / `_PASSWORD`, see `by_billy/frontend/.env.example`;
-an unset pair falls back to `MEDSEAL_GATEWAY_*`, and with nothing set those routes refuse every request with `503`
-(fail closed, never open). Wrong credentials → `401` with `WWW-Authenticate: Basic realm="MedSeal <area>"`.
-State-changing requests whose `Sec-Fetch-Site`/`Origin` is another site → `403` (CSRF: browsers resend cached Basic
-credentials cross-site). `/api/seal` also rejects bodies over 50 MB with `413`, checked
-via the `Content-Length` header before the body is read. This protects the Next.js layer; `POST /seal` on the
-Python backend still separately requires the device bearer token (P0-1) regardless.
+### Website sign-in (production; replaced the P1-01 Basic Auth)
+People sign in at `/login`. `POST /api/session/login` (Next.js) calls the backend `POST /auth/login` and stores
+the session token in an httpOnly, Secure, SameSite=Strict cookie — the page's JavaScript never sees it. Route
+handlers (`by_billy/frontend/src/lib/session.ts`) forward it as `Authorization: Bearer …`; the backend decides
+every role. `src/proxy.ts` sends pages without a session to `/login?next=…` and answers `401` on their API
+routes; state-changing requests whose `Sec-Fetch-Site`/`Origin` is another site get `403` (CSRF), on top of
+the SameSite cookie. Web sealing still uses the gateway's device token server-side (`MEDSEAL_DEVICE_TOKEN`), but
+only after the backend confirms the signed-in user is an operator or admin; the backend audit then reads
+`device:<name> via user:<username>`. `/api/seal` rejects bodies over 50 MB with `413` before reading them.
 
 `GET /seal/{id}/file` — sealed file to download: DICOM with patient tags removed (pixels unchanged) / PNG with `medseal_uid` chunk (pixels unchanged; every other text chunk and EXIF removed). **SEC-01:** requires a device bearer token *or* the admin token (`401` without one); the frontend's own `/api/seal/[id]/file` route handler forwards the device token server-side.
 **For the demo, verify the downloaded file** — a PNG that never went through `/seal` has no `medseal_uid` and is always `unsigned`.
@@ -197,7 +194,7 @@ non-`authentic` outcomes for this organisation's own sealed images (tampered / f
 ## Crash test
 `POST /crash-test` — `Authorization: Bearer <MEDSEAL_ADMIN_TOKEN>` — `{model_id, n_images: 50, eps: [0.5,1,2,4], method: "fgsm" | "pgd"}` → `202 {job_id}`
 - **P1-04:** admin-only (`401` without the admin token) — the frontend calls its own `POST /api/crash-test` route handler
-  (Basic Auth + `MEDSEAL_ADMIN_TOKEN` added server-side), never the backend directly. Reading endpoints below stay public.
+  (the signed-in admin's session forwarded), never the backend directly. Reading endpoints below stay public.
 - Defaults as shown; `n_images` 1–200, each eps in (0, 16] pixel units. Errors: 404 unknown model, 400 not the built-in model, 422 bad input, 503 AI modules not installed.
 - One job runs at a time; 50 images with PGD take ~80 s on a laptop CPU. Poll `GET /crash-test/{job_id}` every ~1 s.
 

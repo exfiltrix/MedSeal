@@ -7,7 +7,6 @@ import { Button, Card, DoctorNote, ErrorBox, PdfLangPicker, Spinner, errorMessag
 import { useLanguage } from "@/lib/language-context";
 import dictionary, { localeOf } from "@/lib/dictionary";
 import { api, pngSrc } from "@/lib/api";
-import { setDoctorSession } from "@/components/Header";
 import type { AutomationStatus, InboxItem, InboxListing, InboxQuery, Severity, VerifyResponse } from "@/lib/types";
 import { InboxIcon } from "@/components/icons";
 
@@ -168,7 +167,6 @@ export default function InboxPage() {
       api
         .getInbox(q)
         .then((res) => {
-          setDoctorSession();
           setListing((prev) => (append && prev ? { ...res, items: [...prev.items, ...res.items] } : res));
           setError(null);
         })

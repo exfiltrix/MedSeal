@@ -1,4 +1,5 @@
 import json
+import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -45,6 +46,11 @@ async def seal(
 ):
     image = await read_upload(file)
     actor, ip = f"device:{device.name}", audit.client_ip(request)
+    # Web sealing: the site's server acts with the gateway's device token and names the signed-in
+    # operator it checked (by_billy/frontend/src/app/api/seal/route.ts), so the audit says who.
+    operator = request.headers.get("x-medseal-operator", "")
+    if re.fullmatch(r"[a-z0-9._-]{1,64}", operator):
+        actor += f" via user:{operator}"
     try:
         row, elapsed_ms = await run_in_threadpool(seal_upload, session, image, device.id)
     except SealError as e:

@@ -1,14 +1,7 @@
 import { NextRequest } from "next/server";
-import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
-import { BACKEND_URL, forward, notConfigured } from "@/lib/serverProxy";
+import { proxyAsUser } from "@/lib/session";
 
-// Server-only: the client (hospital/clinic) cabinet is scoped to one organisation by its own
-// bearer token (MEDSEAL_CLIENT_TOKEN, backend docs/API.md "Client cabinet") — never sent to the
-// browser. Same Basic Auth barrier as the rest of the internal site (src/proxy.ts).
+// The client cabinet: the backend scopes every answer to the signed-in client's own hospital.
 export async function GET(req: NextRequest) {
-  const auth = checkStaffAuth(req, "client");
-  if (!auth.ok) return unauthorizedResponse(auth);
-  const token = process.env.MEDSEAL_CLIENT_TOKEN;
-  if (!BACKEND_URL || !token) return notConfigured("MEDSEAL_CLIENT_TOKEN");
-  return forward("/client/devices", token, { cache: "no-store" });
+  return proxyAsUser(req, "/client/devices");
 }

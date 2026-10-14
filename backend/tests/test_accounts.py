@@ -57,6 +57,13 @@ def test_admin_needs_a_valid_totp_code(client):
     assert _login(client, "rustam", totp=totp.now()).status_code == 200
 
 
+def test_a_totp_code_cannot_be_replayed(client):
+    created = _create(client, "nodira", "admin")
+    code = pyotp.parse_uri(created["mfa_provisioning_uri"]).now()
+    assert _login(client, "nodira", totp=code).status_code == 200
+    assert _login(client, "nodira", totp=code).status_code == 401  # same code, same window
+
+
 def test_wrong_password_and_unknown_user_look_the_same(client):
     _create(client, "aziz", "doctor")
     a, b = _login(client, "aziz", password="wrong password!!"), _login(client, "nobody-here")
