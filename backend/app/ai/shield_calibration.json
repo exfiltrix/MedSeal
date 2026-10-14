@@ -120,6 +120,50 @@
       0.008172834739551826
     ]
   },
-  "adaptive_attack_tested": false,
-  "created_at": "2026-10-14T14:42:51Z"
+  "adaptive_attack_tested": true,
+  "created_at": "2026-10-14T14:42:51Z",
+  "adaptive": {
+    "method": "white-box PGD on flip loss + shield score, 60 steps, exact gradients through the squeezers",
+    "squeezers": [
+      "median3",
+      "median2",
+      "bits5"
+    ],
+    "results": {
+      "1": {
+        "healthy_to_sick": {
+          "n": 30,
+          "fooled_model": 20,
+          "detected_of_fooled": 1,
+          "silent_success": 19,
+          "silent_success_rate": 0.633
+        },
+        "sick_to_healthy": {
+          "n": 30,
+          "fooled_model": 27,
+          "detected_of_fooled": 0,
+          "silent_success": 27,
+          "silent_success_rate": 0.9
+        }
+      },
+      "2": {
+        "healthy_to_sick": {
+          "n": 30,
+          "fooled_model": 28,
+          "detected_of_fooled": 2,
+          "silent_success": 26,
+          "silent_success_rate": 0.867
+        },
+        "sick_to_healthy": {
+          "n": 30,
+          "fooled_model": 29,
+          "detected_of_fooled": 0,
+          "silent_success": 29,
+          "silent_success_rate": 0.967
+        }
+      }
+    },
+    "silent_success_eps1": 0.9,
+    "created_at": "2026-10-14T18:07:52Z"
+  }
 }

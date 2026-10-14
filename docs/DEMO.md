@@ -40,7 +40,8 @@ Pitfalls:
 ## 4. Passport (20 s)
 Open the model's passport: robustness score, verdict, PDF.
 Say: "A passport can only be issued from a crash test that ran the full protocol — PGD, at least
-50 images, eps=1 included — never a quick FGSM run on a handful of images. The shield's detection
+50 images, eps=1 included, in both directions (adding a finding and hiding one) — never a quick
+FGSM run on a handful of images. The shield's detection
 and false-alarm rates are shown with their 95% confidence interval, not just a single number."
 Say: "This is the standard task №6 asks for: every AI model gets a passport before it touches patients."
 
@@ -59,7 +60,7 @@ Growth: pilot hospital → all regions → Central Asia.
 | What if someone deletes the image ID? | Verification searches same-shape/dtype records by a non-signed dHash and then requires at least half of the original tiles to match. A partial derivative is reported as tampered with `seal_id_removed`; an identical re-save is reported as authentic with a warning. In production, add indexed candidate search and rate limits. |
 | Who can seal? | In this demo, the `/seal` page and its server-side gateway routes require HTTP Basic Auth, and the backend still requires a per-device bearer token. Production would put the signing key in a gateway/HSM next to the scanner and expose no browser form. |
 | What if the server is hacked? | Today the demo root key is on the same host and a database write can still be dangerous; device certificates and external anchors detect more tampering, but this is not an HSM deployment. Production should keep the root key offline/HSM, use least-privilege services, and alert on anchor/device-certificate failures. |
-| Is the shield robust to an attacker who knows about it? | The committed numbers test only attacks that do not know about the shield. We report that limitation and the confidence intervals; adaptive attacks were not established here, so the shield must remain a warning rather than a guarantee. |
+| Is the shield robust to an attacker who knows about it? | No, and we measured it: an attacker who optimises against the shield (`scripts/adaptive_attack.py`) gets 63–90% of attacks through at eps 1. The passport shows that number and the condition "shield bypassable by an adaptive attack". That is why the seal, not the shield, is the guarantee; the shield is a warning. |
 | What if the key is stolen? | Keys live only in the gateway (hardware module in production), can be revoked and rotated. |
 | Old images? | Archive can be sealed once from today; the detective covers images without a seal. |
 | Does it slow doctors down? | Seal/verify takes milliseconds per image. |

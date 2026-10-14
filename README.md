@@ -42,21 +42,25 @@ The seal gives an exact answer; the detective and the shield give probabilities,
   anchor: an insider with the database **and** the device keys can re-sign a fake and repair the
   chain, but the root anchored on-chain still remembers the original, so verification says
   *forged: blockchain mismatch*.
-- An adversarial (FGSM/PGD) perturbation reaching the diagnostic model undetected in most cases
-  (feature-squeezing shield, calibrated at a 99th-percentile threshold — see the confidence
+- A standard adversarial (FGSM/PGD) perturbation reaching the diagnostic model undetected in most
+  cases (feature-squeezing shield: an ensemble of three squeezers calibrated at a 99th-percentile
+  threshold, measured in both directions — adding a finding and hiding one; see the confidence
   intervals in every passport, not just the point estimate).
 
 **What it explicitly does not protect against, and says so in the UI/PDF:**
 - An attacker with the device's private key (the demo keeps it on the same host as the gateway
   simulator; production needs an HSM or a physically separate gateway).
-- An adaptive attacker who knows the shield exists and optimises against it (AI-03, not
-  implemented here — `adaptive_attack_tested: false` is shown everywhere the shield reports a
-  result).
+- An adaptive attacker who knows the shield exists and optimises against it (AI-03, measured by
+  `scripts/adaptive_attack.py`: at ε = 1 px 63% (healthy → sick) and 90% (sick → healthy) of such
+  attacks go unnoticed). Every passport shows this number and adds the condition
+  `shield_bypassable_adaptive`: the shield is a warning, not a security boundary.
+- A single-step (FGSM) attack that hides a finding at ε = 1 px: the shield catches 0% of those
+  (PGD in the same direction: 90%). Reported in the calibration, not hidden.
 - A model that is simply bad at the clinical task: the robustness score is not a clinical
   validation. A passport can only reach `allowed` with a non-null `clinical_validation` block; a
   research-only crash test caps out at `allowed_with_conditions`.
 - Anything about the AI detective beyond "experimental": it is trained on synthetic forgeries
-  only (heatmap hits the actual edit in ≈4.8% of cases — close to chance) and is never the sole
+  only (heatmap hits the actual edit in ≈4% of cases — close to chance) and is never the sole
   basis for a status shown to a user; the seal is the only certain signal.
 - A doctor being wrong: every AI verdict in the UI and PDF states that the final decision is the
   doctor's.
@@ -73,11 +77,13 @@ decompression-bomb limits, secrets only in `.env`.
 |---|---|
 | Seal / verify, 512×512 | ≈ 1 ms each (2048×2048: ≈ 16 ms) |
 | Change detected | a single pixel changed by 1 |
-| Shield | 0.9% false alarms on clean adult X-rays; PGD attacks caught 100% at ε ≥ 1 px, FGSM 62% / 87% / 100% at ε 1 / 2 / 4 |
-| Detective | AUC 0.94 on 1000 held-out images; finds ~8 of 10 edits (all removals); 8.4% false alarms — shown only as a probability |
-| Robustness score | `round(10 × (1 − share of diagnoses flipped at ε = 1 px), 1)` |
+| Shield | 0.3% false alarms on 1250 clean adult X-rays. Healthy → sick: PGD caught 100% at ε ≥ 1 px, FGSM 81% / 90% / 100% at ε 1 / 2 / 4. Sick → healthy (hiding a finding): PGD 90% / 100% / 100%, FGSM 0% / 44% / 100%. Shield-aware (adaptive) attacks: 63–90% get through at ε 1 |
+| Detective | AUC 0.93 on 1000 held-out images; finds ~8 of 10 edits (all removals); 10% false alarms, at most 20% after routine processing (CLAHE, JPEG, resize…) — shown only as a probability |
+| Robustness score | `round(10 × (1 − worst share of diagnoses flipped at ε = 1 px, of both directions), 1)` |
 
 Sources: `backend/app/ai/shield_calibration.json`, `backend/app/ai/detective_metrics.json`, `backend/tests/`.
+All AI numbers come from a public 300 px NIH subset (attacks: 30 images per group, so the
+confidence intervals are wide); clinical X-rays are 2000–3000 px.
 
 ## How it works
 
