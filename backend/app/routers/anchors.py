@@ -16,11 +16,11 @@ def list_anchors(session: Session = Depends(get_session)):
             "anchors": service.list_anchors(session)}
 
 
-@router.post("/run", dependencies=[Depends(require_admin)])
-def run(request: Request, session: Session = Depends(get_session)):
+@router.post("/run")
+def run(request: Request, session: Session = Depends(get_session), actor: str = Depends(require_admin)):
     """Anchor every pending seal now (demo). Blocks until the transaction is confirmed."""
     try:
-        anchor = service.run_batch(session, actor="admin", ip=audit.client_ip(request))
+        anchor = service.run_batch(session, actor=actor, ip=audit.client_ip(request))
     except ChainError as e:
         raise HTTPException(503, str(e)) from e
     if anchor is None:

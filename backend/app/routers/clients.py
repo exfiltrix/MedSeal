@@ -25,8 +25,9 @@ class ClientIn(BaseModel):
     hospital: str = Field(min_length=1, max_length=300)
 
 
-@router.post("/clients", status_code=201, dependencies=[Depends(require_admin)])
-def create_client(body: ClientIn, request: Request, session: Session = Depends(get_session)):
+@router.post("/clients", status_code=201)
+def create_client(body: ClientIn, request: Request, session: Session = Depends(get_session),
+                  actor: str = Depends(require_admin)):
     """Create the org-level login for a hospital. The token is returned ONLY in this response —
     only its sha256 is stored (token_hash) — same handling as a device token (POST /devices)."""
     hospital = body.hospital.strip()
@@ -36,7 +37,7 @@ def create_client(body: ClientIn, request: Request, session: Session = Depends(g
     account = ClientAccount(hospital=hospital, token_hash=hash_token(token), created_at=utcnow())
     session.add(account)
     session.flush()
-    audit.log(session, "client_create", "admin", target=f"client:{account.id}", result=hospital,
+    audit.log(session, "client_create", actor, target=f"client:{account.id}", result=hospital,
               ip=audit.client_ip(request))
     session.commit()
     return {"id": account.id, "hospital": account.hospital, "created_at": iso_utc(account.created_at), "token": token}

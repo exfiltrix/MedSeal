@@ -32,18 +32,59 @@ def _deny(session: Session, request: Request, who: str, status: int, message: st
     return HTTPException(status, message)
 
 
+def _session_user(session: Session, request: Request, token: str, allow_password_change: bool = False):
+    """(user, user_session) for a personal sign-in token, or None if it is not one (app/accounts.py).
+    A live session still forced to change its password may only reach the password endpoint."""
+    from app import accounts
+
+    found = accounts.resolve(session, token)
+    if found is None:
+        return None
+    user, _row = found
+    if user.must_change_password and not allow_password_change:
+        raise HTTPException(403, "Password change required")
+    request.state.actor = f"user:{user.username}"
+    return found
+
+
 def require_admin(
     request: Request,
     authorization: str | None = Header(default=None),
     session: Session = Depends(get_session),
-) -> None:
+) -> str:
+    """Admin: an admin's personal session (MFA-protected), or — development only, refused in
+    production by app/hardening.py — the static MEDSEAL_ADMIN_TOKEN. -> the actor for the audit log."""
     try:
         token = _bearer(authorization)
     except HTTPException as e:
         raise _deny(session, request, "admin?", e.status_code, e.detail) from None
     # Compare bytes so a non-ASCII request cannot raise a TypeError and turn auth into a 500.
-    if not _token_matches(token, settings.admin_token):
-        raise _deny(session, request, "admin?", 401, "Invalid admin token")
+    if _token_matches(token, settings.admin_token):
+        return "admin"
+    found = _session_user(session, request, token)
+    if found is not None:
+        if found[0].role == "admin":
+            return f"user:{found[0].username}"
+        raise _deny(session, request, f"user:{found[0].username}", 403, "Admin role required")
+    raise _deny(session, request, "admin?", 401, "Invalid admin token")
+
+
+def require_auditor(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+) -> str:
+    """Read-only oversight (audit log and its check): admin or auditor."""
+    try:
+        token = _bearer(authorization)
+    except HTTPException as e:
+        raise _deny(session, request, "auditor?", e.status_code, e.detail) from None
+    if _token_matches(token, settings.admin_token):
+        return "admin"
+    found = _session_user(session, request, token)
+    if found is not None and found[0].role in ("admin", "auditor"):
+        return f"user:{found[0].username}"
+    raise _deny(session, request, "auditor?", 403 if found else 401, "Auditor or admin role required")
 
 
 def hash_token(token: str) -> str:
@@ -70,16 +111,17 @@ def require_doctor(
     never be readable anonymously. Accepts MEDSEAL_DOCTOR_TOKEN and the admin token; when neither is
     configured the request is refused (fail closed) exactly like require_admin.
     """
-    # Configuration is checked before the header, so an operator who forgot the env var gets a
-    # diagnosable 503 instead of a bare 401 that looks like a wrong password.
-    if not (settings.doctor_token or settings.admin_token):
-        raise _deny(session, request, "doctor?", 503, "Doctor access is not configured")
     try:
         token = _bearer(authorization)
     except HTTPException as e:
         raise _deny(session, request, "doctor?", e.status_code, e.detail) from None
     if _token_matches(token, settings.doctor_token) or _token_matches(token, settings.admin_token):
         return "admin" if _token_matches(token, settings.admin_token) else "doctor"
+    found = _session_user(session, request, token)
+    if found is not None:
+        if found[0].role in ("doctor", "admin"):
+            return f"user:{found[0].username}"
+        raise _deny(session, request, f"user:{found[0].username}", 403, "Doctor role required")
     raise _deny(session, request, "doctor?", 401, "Invalid doctor token")
 
 
@@ -104,6 +146,16 @@ def require_client(
         if not org:
             raise HTTPException(400, "org is required when using the admin token")
         return org
+    found = _session_user(session, request, token)
+    if found is not None:
+        user = found[0]
+        if user.role == "client":
+            return user.hospital  # always the account's own hospital, whatever ?org= says
+        if user.role == "admin":
+            if not org:
+                raise HTTPException(400, "org is required for an admin")
+            return org
+        raise _deny(session, request, f"user:{user.username}", 403, "Client role required")
     account = session.scalar(select(ClientAccount).where(ClientAccount.token_hash == hash_token(token)))
     if account is None:
         raise _deny(session, request, "client?", 401, "Invalid client token")
@@ -129,6 +181,9 @@ def require_seal_owner(
         return
     device = session.scalar(select(Device).where(Device.token_hash == hash_token(token)))
     if device is None:
+        found = _session_user(session, request, token)
+        if found is not None and found[0].role == "admin":
+            return
         raise _deny(session, request, "device?", 401, "Invalid device or admin token")
     row = session.get(Seal, seal_id)
     if row is None or row.device_id != device.id:
@@ -149,6 +204,9 @@ def require_device_or_admin(
         return None
     device = session.scalar(select(Device).where(Device.token_hash == hash_token(token)))
     if device is None:
+        found = _session_user(session, request, token)
+        if found is not None and found[0].role == "admin":
+            return None
         raise _deny(session, request, "device?", 401, "Invalid device or admin token")
     return device
 

@@ -327,5 +327,22 @@ is now `false` if either the hash chain or an anchor fails.
   hash-chained (`prev_hash`/`entry_hash`, linked right after each commit); `broken` lists rows that were
   edited or whose predecessor was deleted.
 
+**Personal accounts (production)** — `app/accounts.py`, `app/routers/accounts.py`
+- `POST /auth/login` `{username, password, totp?}` → `{token, expires_at, user}`; `401` with one generic
+  message for every failure; account locks after `MEDSEAL_LOGIN_MAX_FAILURES` (5) for 15 min; 10 attempts
+  per minute per IP. Admins must send a valid TOTP code.
+- The token goes in `Authorization: Bearer …` exactly like the old role tokens. Sessions expire after 12 h
+  (absolute) or 30 min idle. `must_change_password: true` → every other endpoint answers `403` until
+  `POST /auth/password` `{current, new}` (min 12 chars; revokes the other sessions).
+- `GET /auth/me`, `POST /auth/logout`.
+- Admin: `GET /users`, `POST /users` `{username, role, password, full_name?, hospital?}` (roles: admin,
+  doctor, operator, auditor, client — client needs `hospital`; an admin account returns
+  `mfa_provisioning_uri` once), `POST /users/{id}/deactivate`, `POST /users/{id}/reset`
+  `{password, reset_mfa?}`.
+- Role → access: admin = everything admin; doctor = inbox/automation; auditor = `/audit`, `/audit/check`;
+  client = `/client/*` of its own hospital only. Audit actors are `user:<username>`.
+- `MEDSEAL_ADMIN_TOKEN` / `MEDSEAL_DOCTOR_TOKEN` still work in development; with `MEDSEAL_ENV=production`
+  the backend refuses to start while they are set. First admin: `python -m scripts.create_user`.
+
 **Removed**: nothing was removed from the public surface except `detective.heatmap_png`
 (above) — every other change is additive.

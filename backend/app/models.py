@@ -210,3 +210,47 @@ class AuditEvent(Base):
     # entry_hash = sha256(prev_hash + canonical row). "" = not linked yet.
     prev_hash: Mapped[str] = mapped_column(String(64), default="", server_default="")
     entry_hash: Mapped[str] = mapped_column(String(64), default="", server_default="")
+
+
+ROLES = ("admin", "doctor", "operator", "auditor", "client")
+
+
+class User(Base):
+    """A person who signs in (review: production). Every action is audited under their name.
+
+    Roles: admin (users, devices, crash tests, passports), doctor (inbox), operator (web sealing),
+    auditor (read-only audit/ledger checks), client (one hospital's cabinet: `hospital` is the scope).
+    Passwords: argon2id. MFA: TOTP, mandatory for admin; the secret is encrypted (app/secretbox.py).
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(200), default="")
+    role: Mapped[str] = mapped_column(String(16))
+    hospital: Mapped[str] = mapped_column(String(300), default="")
+    password_hash: Mapped[str] = mapped_column(String(200))
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
+    mfa_secret_enc: Mapped[str] = mapped_column(Text, default="")  # secretbox(base32 TOTP secret)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class UserSession(Base):
+    """A signed-in browser. Only the sha256 of the bearer token is stored; expiry is both absolute
+    and idle, and logout / password change / deactivation revoke it."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)

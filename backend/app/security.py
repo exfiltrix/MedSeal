@@ -34,11 +34,17 @@ def reset_rate_limit() -> None:
         _hits.clear()
 
 
-def _too_many(ip: str) -> float | None:
+# Password guessing gets a far smaller budget than uploads (per IP, on top of the account lockout).
+STRICT_PATHS = {"/api/auth/login": 10}
+
+
+def _too_many(ip: str, path: str = "") -> float | None:
     """Seconds to wait if ip is over the limit, else None (and the request is counted)."""
     limit = settings.rate_limit_per_min
     if limit <= 0:
         return None
+    if path in STRICT_PATHS:
+        limit, ip = min(limit, STRICT_PATHS[path]), f"{ip}|{path}"
     now = time.monotonic()
     with _lock:
         q = _hits[ip]
@@ -66,7 +72,7 @@ def install(app: FastAPI) -> None:
     async def harden(request: Request, call_next):
         if request.method == "POST" or _expensive_get(request):
             ip = request.client.host if request.client else "unknown"
-            wait = _too_many(ip)
+            wait = _too_many(ip, request.url.path)
             if wait is not None:
                 response = JSONResponse({"detail": "Too many requests, slow down"}, status_code=429,
                                         headers={"Retry-After": str(int(wait) + 1)})

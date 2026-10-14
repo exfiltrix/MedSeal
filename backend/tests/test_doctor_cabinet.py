@@ -46,12 +46,12 @@ def test_admin_token_also_opens_the_cabinet(client):
 
 
 def test_cabinet_fails_closed_when_no_token_is_configured(client, monkeypatch):
-    """An unconfigured deployment must not fall back to an open inbox."""
+    """No static tokens is the production state (personal accounts instead): the inbox stays
+    closed — an empty configured token must never match an empty or missing credential."""
     monkeypatch.setattr(settings, "doctor_token", "")
     monkeypatch.setattr(settings, "admin_token", "")
-    r = client.get("/api/inbox")
-    assert r.status_code == 503
-    assert "not configured" in r.json()["detail"]
+    assert client.get("/api/inbox").status_code == 401
+    assert client.get("/api/inbox", headers={"Authorization": "Bearer "}).status_code == 401
 
 
 def test_inbox_leaks_no_medical_image_to_an_anonymous_caller(filled_inbox, client):

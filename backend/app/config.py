@@ -49,6 +49,9 @@ class Settings:
     # Required to create/revoke devices (POST /devices, /devices/{id}/revoke). No default: unset means
     # those endpoints refuse every request, rather than silently accepting an empty bearer token.
     admin_token: str = field(default=os.environ.get("MEDSEAL_ADMIN_TOKEN", ""), repr=False)
+    # AES-256-GCM key (base64, 32 bytes) for data at rest: TOTP secrets, private keys, sealed images
+    # (app/secretbox.py). Production: injected by the secret manager; development: generated file.
+    data_key: str = field(default=os.environ.get("MEDSEAL_DATA_KEY", ""), repr=False)
     # Optional HMAC salt used to bind a DICOM PatientID without storing it. Keep it stable.
     patient_salt: str = os.environ.get("MEDSEAL_PATIENT_SALT", "")
     # Bearer token for the doctor's cabinet (GET/POST /inbox, /inbox/{id}, review, /automation).
@@ -86,6 +89,13 @@ class Settings:
     anchor_interval_s: float = float(os.environ.get("MEDSEAL_ANCHOR_INTERVAL", "600"))
     anchor_confirmations: int = int(os.environ.get("MEDSEAL_ANCHOR_CONFIRMATIONS", "1"))
 
+
+    # Sign-in sessions (app/accounts.py): absolute lifetime and idle timeout, in minutes.
+    session_hours: float = float(os.environ.get("MEDSEAL_SESSION_HOURS", "12"))
+    session_idle_minutes: float = float(os.environ.get("MEDSEAL_SESSION_IDLE_MINUTES", "30"))
+    # Failed sign-ins before the account is locked, and for how long.
+    login_max_failures: int = int(os.environ.get("MEDSEAL_LOGIN_MAX_FAILURES", "5"))
+    login_lock_minutes: float = float(os.environ.get("MEDSEAL_LOGIN_LOCK_MINUTES", "15"))
 
     @property
     def production(self) -> bool:

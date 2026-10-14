@@ -13,3 +13,5 @@ python-dotenv==1.0.1  # secrets from backend/.env
 web3==8.0.0  # blockchain anchoring (app/anchor)
 psycopg[binary]==3.3.6  # PostgreSQL driver (MEDSEAL_DB_URL=postgresql+psycopg://...)
 alembic==1.20.0  # schema migrations (migrations/), applied on startup by app/db.py
+argon2-cffi==25.1.0  # password hashing (argon2id), app/accounts.py
+pyotp==2.10.0  # TOTP MFA for admins

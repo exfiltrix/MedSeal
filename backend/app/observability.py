@@ -76,13 +76,13 @@ def install(app: FastAPI) -> None:
         t0 = time.perf_counter()
         try:
             response = await call_next(req)
+            response.headers["X-Request-ID"] = rid
+            access_log.info("request", extra={"method": req.method, "path": _SECRET_PATH.sub(r"\1***", req.url.path),
+                                              "status": response.status_code,
+                                              "ms": round((time.perf_counter() - t0) * 1000, 1)})
+            return response
         finally:
             request_id.reset(token)
-        response.headers["X-Request-ID"] = rid
-        access_log.info("request", extra={"method": req.method, "path": _SECRET_PATH.sub(r"\1***", req.url.path),
-                                          "status": response.status_code,
-                                          "ms": round((time.perf_counter() - t0) * 1000, 1)})
-        return response
 
 
 @router.get("/health/live")

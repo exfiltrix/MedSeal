@@ -24,6 +24,7 @@ def production_ready(monkeypatch):
         "contract_address": "0x" + "1" * 40,
         "anchor_private_key": STRONG,
         "chain_id": 11155111,
+        "data_key": "k" * 44,
     }.items():
         monkeypatch.setattr(settings, name, value)
     assert hardening.problems() == []
@@ -34,8 +35,9 @@ def production_ready(monkeypatch):
     ("db_url", "sqlite:///medseal.db", "PostgreSQL"),
     ("patient_salt", "", "MEDSEAL_PATIENT_SALT"),
     ("patient_salt", "change-me", "MEDSEAL_PATIENT_SALT"),
-    ("admin_token", "dev-admin-token", "MEDSEAL_ADMIN_TOKEN"),
+    ("admin_token", "x" * 64, "MEDSEAL_ADMIN_TOKEN"),
     ("doctor_token", "short", "MEDSEAL_DOCTOR_TOKEN"),
+    ("data_key", "", "MEDSEAL_DATA_KEY"),
     ("require_device_cert", False, "MEDSEAL_REQUIRE_DEVICE_CERT"),
     ("rate_limit_per_min", 0, "MEDSEAL_RATE_LIMIT"),
     ("cors_origin_regex", r"http://192\.168\..*", "MEDSEAL_CORS_ORIGIN_REGEX"),

@@ -8,7 +8,7 @@ from app.config import settings
 from app.db import init_engine
 from app.anchor import chain as anchor_chain, service as anchoring
 from app.automation import warmup, watcher
-from app.routers import anchors, audit, check, clients, crash_test, devices, inbox, passport, seal, stats, verify
+from app.routers import accounts, anchors, audit, check, clients, crash_test, devices, inbox, passport, seal, stats, verify
 from app.seal.recovery import backfill_dhash
 
 
@@ -59,7 +59,7 @@ app.add_middleware(
 )
 
 for r in (devices.router, seal.router, verify.router, inbox.router, check.router, crash_test.router, passport.router,
-          stats.router, anchors.router, audit.router, clients.router, observability.router):
+          stats.router, anchors.router, audit.router, clients.router, observability.router, accounts.router):
     app.include_router(r, prefix="/api")
 
 

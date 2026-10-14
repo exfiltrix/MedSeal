@@ -35,8 +35,9 @@ def list_devices(session: Session = Depends(get_session)):
     return [device_json(d) for d in session.scalars(select(Device).order_by(Device.id))]
 
 
-@router.post("", status_code=201, dependencies=[Depends(require_admin)])
-def create_device(body: DeviceIn, request: Request, session: Session = Depends(get_session)):
+@router.post("", status_code=201)
+def create_device(body: DeviceIn, request: Request, session: Session = Depends(get_session),
+                  actor: str = Depends(require_admin)):
     """Creates the device, its key pair and a bearer token.
 
     The token is returned ONLY in this response — only its sha256 is stored (token_hash).
@@ -55,14 +56,15 @@ def create_device(body: DeviceIn, request: Request, session: Session = Depends(g
     keys.certify_device(device)
     token = new_device_token()
     device.token_hash = hash_token(token)
-    audit.log(session, "device_create", "admin", target=f"device:{device.id}", result=device.name,
+    audit.log(session, "device_create", actor, target=f"device:{device.id}", result=device.name,
               ip=audit.client_ip(request))
     session.commit()
     return device_json(device) | {"token": token}
 
 
-@router.post("/{device_id}/revoke", dependencies=[Depends(require_admin)])
-def revoke_device(device_id: int, request: Request, session: Session = Depends(get_session)):
+@router.post("/{device_id}/revoke")
+def revoke_device(device_id: int, request: Request, session: Session = Depends(get_session),
+                  actor: str = Depends(require_admin)):
     """Seals made by this device AFTER revoked_at verify as `forged` (reason: device_revoked).
     Seals made before it (e.g. the key was stolen just now, not at creation) stay authentic/tampered
     as normal, with a warning — see verify.service."""
@@ -75,7 +77,7 @@ def revoke_device(device_id: int, request: Request, session: Session = Depends(g
         # is never part of a hash, and second-level rounding could otherwise tie with a seal's
         # created_at made moments earlier in the same test/request burst.
         device.revoked_at = datetime.now(timezone.utc)
-    audit.log(session, "device_revoke", "admin", target=f"device:{device.id}", result=device.name,
+    audit.log(session, "device_revoke", actor, target=f"device:{device.id}", result=device.name,
               ip=audit.client_ip(request))
     session.commit()
     return device_json(device)

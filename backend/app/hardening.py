@@ -33,8 +33,12 @@ def problems() -> list[str]:
         out.append(f"MEDSEAL_PATIENT_SALT must be a random secret of at least {MIN_SECRET_LEN} characters "
                    "(without it a patient swap between images is not detected)")
     for name, value in (("MEDSEAL_ADMIN_TOKEN", settings.admin_token), ("MEDSEAL_DOCTOR_TOKEN", settings.doctor_token)):
-        if value and _weak(value):
-            out.append(f"{name} is set but weak (shorter than {MIN_SECRET_LEN} characters or a placeholder)")
+        if value:
+            out.append(f"{name} must be empty: people sign in with personal accounts "
+                       "(python -m scripts.create_user), a shared token cannot say who acted")
+    if not settings.data_key:
+        out.append("MEDSEAL_DATA_KEY must come from the secret manager (a generated key file next to the "
+                   "data it protects is for development only)")
     if not settings.require_device_cert:
         out.append("MEDSEAL_REQUIRE_DEVICE_CERT=0 is a migration mode: uncertified devices must fail verification")
     if settings.rate_limit_per_min <= 0:
