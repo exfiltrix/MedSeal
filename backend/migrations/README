@@ -1,0 +1,8 @@
+Alembic migrations for the MedSeal database (PostgreSQL in production, SQLite for the offline demo).
+
+The app applies them itself on startup (app/db.py: init_engine). By hand, from backend/:
+
+    .venv/bin/alembic upgrade head                                # MEDSEAL_DB_URL picks the database
+    .venv/bin/alembic revision --autogenerate -m "what changed"   # after editing app/models.py
+
+Never edit a revision that has been released; add a new one.

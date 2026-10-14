@@ -1,4 +1,5 @@
 import io
+import os
 
 import numpy as np
 import pydicom
@@ -10,6 +11,28 @@ from pydicom.data import get_testdata_file
 from app.config import settings
 
 
+# MEDSEAL_TEST_DB_URL=postgresql+psycopg://... runs the whole suite on PostgreSQL (its public schema
+# is wiped before every test); unset, every test gets its own throwaway SQLite file.
+TEST_DB_URL = os.environ.get("MEDSEAL_TEST_DB_URL", "")
+
+
+def fresh_database(tmp_path) -> str:
+    if not TEST_DB_URL.startswith("postgresql"):
+        return f"sqlite:///{tmp_path / 'test.db'}"
+    from sqlalchemy import create_engine, text
+
+    from app import db
+
+    if db.engine is not None:
+        db.engine.dispose()  # drop pooled connections that would block DROP SCHEMA
+    engine = create_engine(TEST_DB_URL, isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+    engine.dispose()
+    return TEST_DB_URL
+
+
 ADMIN_TOKEN = "test-admin-token"
 DOCTOR_TOKEN = "test-doctor-token"
 
@@ -17,7 +40,7 @@ DOCTOR_TOKEN = "test-doctor-token"
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     """API client with its own SQLite file, key dir and storage dir."""
-    monkeypatch.setattr(settings, "db_url", f"sqlite:///{tmp_path / 'test.db'}")
+    monkeypatch.setattr(settings, "db_url", fresh_database(tmp_path))
     monkeypatch.setattr(settings, "keys_dir", tmp_path / "keys")
     monkeypatch.setattr(settings, "storage_dir", tmp_path / "storage")
     monkeypatch.setattr(settings, "root_key_path", tmp_path / "root.pem")
