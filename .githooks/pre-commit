@@ -31,6 +31,9 @@ ok "no data or junk files"
 
 # --- tests for what changed ---
 if echo "$staged" | grep -E '^(backend/|docs/SECURITY\.md|by_billy/frontend/src/lib/dictionary\.ts)' >/dev/null; then
+  echo "▶ backend lint…"
+  (cd backend && .venv/bin/ruff check -q .) || fail "backend lint (ruff) failed"
+  ok "backend lint"
   echo "▶ backend tests (fast, ~10 s)…"
   (cd backend && .venv/bin/pytest -m "not ai" -q -p no:warnings -x) || fail "backend tests failed"
   ok "backend tests"

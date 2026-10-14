@@ -620,7 +620,7 @@ def test_seal_made_after_revocation_is_forged(client, device):
     from datetime import timedelta
 
     from app import db
-    from app.models import Device, Seal, utcnow
+    from app.models import Device, Seal
 
     with db.SessionLocal() as s:
         # Backdate the revocation to before the seal was made, simulating a key compromised earlier.

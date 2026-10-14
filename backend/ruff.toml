@@ -1,0 +1,5 @@
+# Static checks for the backend (review round 1): syntax errors and pyflakes (unused/undefined names).
+line-length = 120
+
+[lint]
+select = ["E9", "F"]

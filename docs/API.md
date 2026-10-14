@@ -213,16 +213,19 @@ when done:
   "method": "pgd", "pathology": "Pneumonia", "data": ["nih/normal"],
   "eps": [0.5, 1, 2, 4],
   "flip_rate": {"0.5": 0.32, "1": 0.98, "2": 1.0, "4": 1.0},
+  "n_images_reverse": 50, "data_reverse": ["nih/findings"], "score_basis": "worst_direction",
+  "flip_rate_reverse": {"0.5": 0.4, "1": 1.0, "2": 1.0, "4": 1.0},
   "psnr": {"0.5": 54.7, "1": 50.0, "2": 47.9, "4": 45.0},
   "example": { "eps": 1, "before_png": "base64…", "after_png": "…", "before_score": 0.08, "after_score": 0.93 },
   "robustness_score": 0.2,
   "duration_s": 79.7 }
 ```
-- `eps` always contains `1` (added if missing): the score is `round(10 × (1 − flip_rate["1"]), 1)`.
+- `eps` always contains `1` (added if missing): the score is `round(10 × (1 − max(flip_rate["1"], flip_rate_reverse["1"])), 1)` — the worse of the two directions (review round 1; `score_basis: "healthy_to_sick"` when no sick images were available and only `flip_rate` counts).
+- `flip_rate_reverse` / `n_images_reverse` / `data_reverse`: the same attack on images the model reads as sick (`nih/findings`), pushing them to healthy — hiding a finding. `null` / `0` when none were available.
 - `flip_rate` / `psnr` keys are eps formatted without trailing zeros (`"0.5"`, `"1"`, `"2"`). PSNR in dB: > 40 means the noise is invisible to the eye.
 - Images are adult chest X-rays (NIH) the model reads as healthy; `data` lists the folders they came from (`nih/normal`, or `samples` when the dataset is not downloaded); a "flip" = the attack pushed the Pneumonia score above 0.5.
 - `n_requested` vs `n_images`: fewer images than requested may have been available/healthy — always show both, never just the smaller number silently.
-- **P1-04** `protocol_compliant` = `method == "pgd" and n_images >= 50 and 1 in eps` — the exact rule `POST /passport` enforces (see below). A job below this bar can still be inspected but cannot become a passport.
+- **P1-04** `protocol_compliant` = `method == "pgd" and n_images >= 50 and 1 in eps and n_images_reverse >= 20` (protocol v2: both directions) — the exact rule `POST /passport` enforces (see below). A job below this bar can still be inspected but cannot become a passport.
 - A job interrupted by a server restart returns `status: "error"`.
 
 `GET /crash-tests?model_id=1` → finished tests, newest first, same fields as "done" but without `example`.
@@ -233,7 +236,7 @@ when done:
   same as crash tests above. Reading endpoints below stay public.
 - `crash_test_id` defaults to the model's latest finished crash test. `organisation` = responsible organisation (free text, may be empty).
 - Errors: 404 unknown model / crash test of another model, 409 no finished crash test yet, **409 crash test does not meet
-  the passport protocol** (`PROTOCOL = {method: "pgd", min_images: 50, eps_required: [1]}` — see `protocol_compliant` above;
+  the passport protocol** (`PROTOCOL = {method: "pgd", min_images: 50, eps_required: [1], min_images_reverse: 20, version: 2}` — see `protocol_compliant` above;
   message states what was required vs what the crash test actually had).
 - A passport is frozen at issue time: later seals, verifications or crash tests do not change it. Issue a new one to refresh.
 
@@ -244,7 +247,7 @@ when done:
 ```json
 { "id": 1, "created_at": "2026-09-25T06:33:20Z", "organisation": "Namangan viloyat shifoxonasi",
   "model": { "id": 1, "name": "torchxrayvision DenseNet121", "version": "densenet121-res224-all", "source": "https://…", "intended_use": "…" },
-  "robustness": { "score": 0.2, "formula": "10 × (1 − flip rate at eps = 1 px)", "crash_test_id": 1, "tested_at": "…",
+  "robustness": { "score": 0.2, "formula": "10 × (1 − worst flip rate of both directions at eps = 1 px)", "crash_test_id": 1, "tested_at": "…",
                   "n_images": 50, "method": "pgd", "pathology": "Pneumonia", "data": ["nih/normal"],
                   "flip_rate": {"0.5": 0.32, "1": 0.98, "2": 1.0, "4": 1.0}, "psnr": {"0.5": 54.7, "1": 50.0, "2": 47.9, "4": 45.0},
                   "example": { "eps": 1, "before_png": "base64…", "after_png": "base64…", "before_score": 0.07, "after_score": 0.78 } },
@@ -252,21 +255,24 @@ when done:
   "shield": { "available": true, "compatible": true, "method": "median 3x3, L1 distance of DenseNet logits", "threshold": 10.419,
               "false_positive_rate": 0.009, "detection_pgd_eps1": 1.0, "detection_fgsm_eps1": 0.619, "calibrated_on": "NIH ChestX-ray14 …",
               "confidence_intervals": { "detection_pgd_eps1": { "successes": 29, "n": 29, "lower": 0.880555, "upper": 1.0 }, "false_positive_rate": { "successes": 4, "n": 450, "lower": 0.002427, "upper": 0.022602 } },
-              "adaptive_attack_tested": false },
+              "directions_tested": 2, "adaptive_attack_tested": true, "adaptive_silent_success_eps1": 0.9, "bypassable": true },
   "pipeline": { "devices_active": 1, "seals": 12, "verifications": 30, "tampered_or_forged": 4, "ledger_ok": true },
   "verdict": "allowed_with_conditions",
   "conditions": ["clinical_validation_required", "shield_required", "seal_required", "doctor_decides"],
   "rules": { "allow_score": 7.0, "shield_min_detection": 0.9, "shield_max_false_alarms": 0.02 },
-  "protocol": { "method": "pgd", "min_images": 50, "eps_required": [1] },
+  "protocol": { "method": "pgd", "min_images": 50, "eps_required": [1], "min_images_reverse": 20, "version": 2 },
   "fingerprint": "a1b2c3d4e5f60718",
   "verify_url": "/api/passport/1/verify",
   "note": "Final decision is made by the doctor." }
 ```
 - `verdict` is a research robustness assessment, not a regulatory or clinical permission. Codes remain `allowed` / `allowed_with_conditions` / `not_allowed` for API stability; display text must say what the measured thresholds mean. The current decision rules are built from `rules` and are not a clinical validation.
+- `shield.detection_pgd_eps1` / `detection_fgsm_eps1` are the **worse** of the two attack directions when the calibration measured both (`directions_tested: 2`).
 - `shield.compatible` = catches ≥ 90% PGD attacks at eps 1 px with ≤ 2% false alarms **(point estimate, decided under AI-01 — see `ARCHITECTURE.md`)**. `confidence_intervals` are shown next to it but do not gate `compatible`. If the shield is not calibrated: `{"available": false, "compatible": false}` only.
 - `conditions` are codes; texts go in the frontend dictionary (the PDF has the same texts in `backend/app/passport/i18n.py`):
   - `clinical_validation_required` (**AI-02**) — `clinical_validation` is `null`; a research score alone cannot reach `allowed`, only `allowed_with_conditions` at best
   - `shield_required` — every image passes the MedSeal shield before the model
+  - `shield_bypassable_adaptive` — an attacker who knows the shield got past it in ≥ 10% of attempts
+    (`scripts/adaptive_attack.py`, worst direction, eps 1 px; `shield.adaptive_silent_success_eps1`)
   - `seal_required` — images sealed at capture and verified before the model
   - `doctor_decides` — the model only advises; the doctor makes the diagnosis
   - `retest_required` — retrain the model against attacks and re-run the crash test
@@ -310,6 +316,12 @@ is now `false` if either the hash chain or an anchor fails.
 - `fingerprint`, `verify_url`: new fields; new endpoint `GET /passport/{id}/verify` (CRY-04).
 - `protocol_compliant` on crash-test results, and the `409` "does not meet the passport
   protocol" refusal on `POST /passport`: new (P1-04).
+
+**Review round 1**
+- Crash test: `flip_rate_reverse`, `n_images_reverse`, `data_reverse`, `score_basis`; the score takes the worse direction; passport protocol v2 (`min_images_reverse`) — one-direction crash tests get `409` on `POST /passport`.
+- Passport `shield`: `directions_tested`, `adaptive_attack_tested` (now measured), `adaptive_silent_success_eps1`, `bypassable`; condition `shield_bypassable_adaptive`. A robust (≥ 7) but unvalidated model without a shield gets only `clinical_validation_required` (no `retest_required`).
+- `/ledger/check`: a v2 seal without an anchor line is an `anchor_mismatch` (deleted / truncated anchor file).
+- Inbox: watched files are identified by name **and** content hash.
 
 **Removed**: nothing was removed from the public surface except `detective.heatmap_png`
 (above) — every other change is additive.

@@ -5,7 +5,6 @@ import io
 import re
 import struct
 import zlib
-from pathlib import Path
 
 import pydicom
 import pytest
