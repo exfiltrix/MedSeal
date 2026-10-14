@@ -341,6 +341,32 @@ def test_anchor_detects_rewritten_but_rechained_row(client, device):
     assert result["anchor_mismatch"] == [body["seal_id"]]
 
 
+def test_deleting_the_anchor_file_is_detected(client, device):
+    """CRY-03 bypass: with no anchor file at all the check used to report ok: True."""
+    from app.config import settings
+
+    for seed in range(3):
+        seal(client, device, xray_png(seed=40 + seed))
+    settings.anchor_path.unlink()
+    result = client.get("/api/ledger/check").json()
+    assert result["ok"] is False
+    assert result["anchors_checked"] == 0
+    assert result["anchor_mismatch"] == [1, 2, 3]
+
+
+def test_cutting_the_head_of_the_anchor_file_is_detected(client, device):
+    """Dropping the first lines used to move the 'anchoring started here' point forward unnoticed."""
+    from app.config import settings
+
+    for seed in range(3):
+        seal(client, device, xray_png(seed=50 + seed))
+    lines = settings.anchor_path.read_text().splitlines(keepends=True)
+    settings.anchor_path.write_text("".join(lines[2:]))
+    result = client.get("/api/ledger/check").json()
+    assert result["ok"] is False
+    assert result["anchor_mismatch"] == [1, 2]
+
+
 def test_ledger_hash_chain(client, device):
     for seed in range(3):
         seal(client, device, xray_png(seed=seed))

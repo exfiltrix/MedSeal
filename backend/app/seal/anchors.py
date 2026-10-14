@@ -61,8 +61,6 @@ def append_anchor(row: Seal) -> None:
 def check_anchors(session: Session) -> tuple[int, list[int]]:
     """Return (number checked, mismatching/missing anchor row IDs)."""
     entries = _read_entries()
-    if not entries:
-        return 0, []
     rows = {row.id: row for row in session.scalars(select(Seal))}
     checked = 0
     mismatch: set[int] = set()
@@ -94,4 +92,8 @@ def check_anchors(session: Session) -> tuple[int, list[int]]:
         for n in range(first, last + 1):
             if n not in seen:
                 mismatch.add(n)
+    # v2 signatures and external anchors shipped together (CRY-01..03): every v2 row was anchored
+    # the moment it was sealed. Without this, deleting the anchor file, or cutting lines off its
+    # head, silently switched the check off ("no anchors yet" / "legacy rows").
+    mismatch.update(n for n, row in rows.items() if (row.sig_version or 1) >= 2 and n not in seen)
     return checked, sorted(mismatch)
