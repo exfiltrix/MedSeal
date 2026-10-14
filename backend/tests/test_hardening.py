@@ -1,0 +1,75 @@
+"""MEDSEAL_ENV=production refuses to start on an unsafe configuration (app/hardening.py)."""
+import pytest
+
+from app import hardening
+from app.config import settings
+
+STRONG = "x" * 40
+
+
+@pytest.fixture
+def production_ready(monkeypatch):
+    """A configuration that passes every check; each test breaks exactly one thing."""
+    for name, value in {
+        "env": "production",
+        "db_url": "postgresql+psycopg://medseal:pw@db/medseal",
+        "patient_salt": STRONG,
+        "admin_token": "",
+        "doctor_token": "",
+        "require_device_cert": True,
+        "rate_limit_per_min": 120,
+        "cors_origin_regex": "",
+        "cors_origins": ["https://medseal.example.uz"],
+        "rpc_url": "https://rpc.example",
+        "contract_address": "0x" + "1" * 40,
+        "anchor_private_key": STRONG,
+        "chain_id": 11155111,
+    }.items():
+        monkeypatch.setattr(settings, name, value)
+    assert hardening.problems() == []
+    return monkeypatch
+
+
+@pytest.mark.parametrize("name,value,expected", [
+    ("db_url", "sqlite:///medseal.db", "PostgreSQL"),
+    ("patient_salt", "", "MEDSEAL_PATIENT_SALT"),
+    ("patient_salt", "change-me", "MEDSEAL_PATIENT_SALT"),
+    ("admin_token", "dev-admin-token", "MEDSEAL_ADMIN_TOKEN"),
+    ("doctor_token", "short", "MEDSEAL_DOCTOR_TOKEN"),
+    ("require_device_cert", False, "MEDSEAL_REQUIRE_DEVICE_CERT"),
+    ("rate_limit_per_min", 0, "MEDSEAL_RATE_LIMIT"),
+    ("cors_origin_regex", r"http://192\.168\..*", "MEDSEAL_CORS_ORIGIN_REGEX"),
+    ("cors_origins", ["http://medseal.example.uz"], "https"),
+    ("rpc_url", "", "anchoring must be configured"),
+    ("chain_id", 31337, "local development chain"),
+])
+def test_each_unsafe_setting_is_named(production_ready, name, value, expected):
+    production_ready.setattr(settings, name, value)
+    found = hardening.problems()
+    assert len(found) == 1 and expected in found[0], found
+
+
+def test_production_refuses_to_start(production_ready):
+    production_ready.setattr(settings, "db_url", "sqlite:///medseal.db")
+    with pytest.raises(hardening.InsecureConfiguration, match="PostgreSQL"):
+        hardening.check_on_startup()
+
+
+def test_development_only_warns(production_ready, caplog):
+    production_ready.setattr(settings, "env", "development")
+    production_ready.setattr(settings, "db_url", "sqlite:///medseal.db")
+    hardening.check_on_startup()  # no exception
+    assert "insecure configuration" in caplog.text
+
+
+def test_production_app_does_not_start_with_sqlite(client, monkeypatch):
+    """The real lifespan runs the check before touching the database."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    monkeypatch.setattr(settings, "env", "production")
+    monkeypatch.setattr(settings, "db_url", "sqlite:///never-created.db")
+    with pytest.raises(hardening.InsecureConfiguration):
+        with TestClient(app):
+            pass

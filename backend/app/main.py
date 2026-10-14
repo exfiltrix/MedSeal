@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import db, security
+from app import db, hardening, observability, security
 from app.config import settings
 from app.db import init_engine
 from app.anchor import chain as anchor_chain, service as anchoring
@@ -19,6 +19,8 @@ def _read_sealed_file(row) -> bytes | None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    observability.configure_logging()
+    hardening.check_on_startup()  # MEDSEAL_ENV=production: refuse to start on an unsafe configuration
     init_engine()
     with db.SessionLocal() as session:
         crash_test.seed_models(session)
@@ -42,22 +44,22 @@ async def lifespan(app: FastAPI):
         anchoring.stop()
 
 
-app = FastAPI(title="MedSeal API", version="0.1.0", lifespan=lifespan)
+# Production: no interactive API explorer on the public surface (it maps every endpoint for an attacker).
+_docs = {} if not settings.production else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="MedSeal API", version="0.1.0", lifespan=lifespan, **_docs)
 security.install(app)  # before CORS: CORS must stay the outermost middleware
+observability.install(app)  # request id on every request and log line
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_origin_regex=settings.cors_origin_regex or None,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
+    expose_headers=["Content-Disposition", "X-Request-ID"],
 )
 
 for r in (devices.router, seal.router, verify.router, inbox.router, check.router, crash_test.router, passport.router,
-          stats.router, anchors.router, audit.router, clients.router):
+          stats.router, anchors.router, audit.router, clients.router, observability.router):
     app.include_router(r, prefix="/api")
 
 
-@app.get("/api/health")
-def health():
-    return {"ok": True}

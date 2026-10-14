@@ -18,6 +18,9 @@ def _path(env: str, default: Path) -> Path:
 
 @dataclass
 class Settings:
+    # "production" switches on the startup checks in app/hardening.py (refuse to run insecurely)
+    # and turns off developer conveniences (Swagger UI). Anything else = development.
+    env: str = os.environ.get("MEDSEAL_ENV", "development")
     db_url: str = os.environ.get("MEDSEAL_DB_URL", f"sqlite:///{BACKEND_DIR / 'medseal.db'}")
     # Private device keys (demo stand-in for the gateway HSM). Gitignored.
     keys_dir: Path = _path("MEDSEAL_KEYS_DIR", BACKEND_DIR / "keys")
@@ -82,6 +85,11 @@ class Settings:
     anchor_enabled: bool = os.environ.get("MEDSEAL_ANCHOR", "1") != "0"  # background batching loop
     anchor_interval_s: float = float(os.environ.get("MEDSEAL_ANCHOR_INTERVAL", "600"))
     anchor_confirmations: int = int(os.environ.get("MEDSEAL_ANCHOR_CONFIRMATIONS", "1"))
+
+
+    @property
+    def production(self) -> bool:
+        return self.env == "production"
 
 
 settings = Settings()
