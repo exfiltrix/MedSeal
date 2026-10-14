@@ -36,6 +36,24 @@ describe("MedSealAnchor", function () {
     const writers = contract.interface.fragments
       .filter((f) => f.type === "function" && !["view", "pure"].includes(f.stateMutability))
       .map((f) => f.name);
-    expect(writers).to.deep.equal(["anchor"]);
+    expect(writers.sort()).to.deep.equal(["anchor", "transferOwnership"]);
+  });
+
+  it("owner can rotate the anchoring key; the old key loses access, history stays", async function () {
+    const { contract, owner, other } = await deploy();
+    await contract.anchor(root, 1);
+    await expect(contract.transferOwnership(other.address))
+      .to.emit(contract, "OwnershipTransferred").withArgs(owner.address, other.address);
+    await expect(contract.anchor(ethers.ZeroHash, 1)).to.be.revertedWith("only MedSeal");
+    const root2 = ethers.keccak256(ethers.toUtf8Bytes("batch-2"));
+    await contract.connect(other).anchor(root2, 2);
+    expect(await contract.total()).to.equal(2);
+    expect((await contract.anchors(0)).root).to.equal(root);
+  });
+
+  it("only the owner can rotate, and never to the zero address", async function () {
+    const { contract, other } = await deploy();
+    await expect(contract.connect(other).transferOwnership(other.address)).to.be.revertedWith("only MedSeal");
+    await expect(contract.transferOwnership(ethers.ZeroAddress)).to.be.revertedWith("zero address");
   });
 });

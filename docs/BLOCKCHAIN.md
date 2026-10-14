@@ -95,3 +95,4 @@ Add to `seals`: `anchor_id`, `merkle_proof_json`.
 - `blockchain: null` when anchoring is off (no `RPC_URL` / `CONTRACT_ADDRESS` / `ANCHOR_PRIVATE_KEY` in `backend/.env`) or the image is unsigned.
 - Tile hashing keeps the frozen v1 format (no domain separation) — only the batch tree uses it. Migrating tiles needs a format version on the seal; see CLAUDE.md.
 - Honest limit: seals are only protected by the chain once anchored (≤ 10 min window).
+- `owner` is no longer `immutable`: `transferOwnership(newOwner)` (owner only, never the zero address, emits `OwnershipTransferred`) rotates a leaked or lost anchoring key without deploying a new contract, which would split the history verifiers read. Past anchors are untouched; `anchor` is still the only function that writes history (Hardhat tests). Already deployed contracts keep the old bytecode: rotation needs a redeploy once.

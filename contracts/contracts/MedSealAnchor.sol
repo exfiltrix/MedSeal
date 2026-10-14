@@ -5,13 +5,23 @@ pragma solidity ^0.8.24;
 /// @notice Stores Merkle roots of batches of MedSeal ledger entries. Only hashes: never images,
 ///         never patient data. There is no update or delete: history is append-only by construction.
 contract MedSealAnchor {
-    address public immutable owner;
+    /// @notice The anchoring key. Rotatable: a leaked key must not force a new contract, which would
+    ///         split the history every verifier reads in two. Rotation never touches past anchors.
+    address public owner;
     struct Anchor { bytes32 root; uint64 time; uint32 count; }
     Anchor[] public anchors;
     mapping(bytes32 => bool) public anchored;
     event Anchored(uint256 indexed id, bytes32 root, uint32 count);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor() { owner = msg.sender; }
+
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "only MedSeal");
+        require(newOwner != address(0), "zero address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
 
     function anchor(bytes32 root, uint32 count) external returns (uint256 id) {
         require(msg.sender == owner, "only MedSeal");
