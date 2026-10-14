@@ -1,0 +1,27 @@
+# PostgreSQL for MedSeal (production-like runs). The offline hackathon demo needs none of this:
+# without MEDSEAL_DB_URL the backend falls back to SQLite.
+#
+#   MEDSEAL_PG_PASSWORD=... docker compose up -d
+#   MEDSEAL_DB_URL=postgresql+psycopg://medseal:$MEDSEAL_PG_PASSWORD@localhost:5432/medseal  (backend/.env)
+#
+# The backend creates/upgrades the schema itself on startup (Alembic, backend/migrations).
+services:
+  postgres:
+    image: postgres:17.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medseal
+      POSTGRES_DB: medseal
+      # No default: an unset password must stop compose, never become a known one.
+      POSTGRES_PASSWORD: ${MEDSEAL_PG_PASSWORD:?set MEDSEAL_PG_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"  # localhost only: the database is never exposed on the network
+    volumes:
+      - medseal-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medseal -d medseal"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  medseal-pg:

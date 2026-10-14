@@ -116,6 +116,22 @@ export MEDSEAL_ADMIN_TOKEN=dev-admin-token         # required for /devices, /rev
 .venv/bin/uvicorn app.main:app --reload --port 8000 # Swagger: http://localhost:8000/docs
 ```
 
+**Database.** Without `MEDSEAL_DB_URL` the backend uses an SQLite file (`backend/medseal.db`) — enough
+for the offline demo. For anything shared, use PostgreSQL:
+
+```bash
+MEDSEAL_PG_PASSWORD=change-me docker compose up -d           # repo root: PostgreSQL 17 on localhost:5432
+echo 'MEDSEAL_DB_URL=postgresql+psycopg://medseal:change-me@localhost:5432/medseal' >> backend/.env
+# an existing SQLite database moves over with every id and hash, verified on arrival:
+.venv/bin/python -m scripts.migrate_sqlite_to_postgres --source sqlite:///medseal.db \
+    --target postgresql+psycopg://medseal:change-me@localhost:5432/medseal
+```
+
+The schema is created and upgraded on startup by Alembic (`backend/migrations`); after changing
+`app/models.py`, add a revision: `.venv/bin/alembic revision --autogenerate -m "..."`
+(`tests/test_migrations.py` fails if the models and the migrations drift apart). On PostgreSQL,
+several uvicorn workers can seal at once: ledger appends take a database advisory lock.
+
 Or everything for the demo in one command — local blockchain + contract + backend on :8000:
 
 ```bash
@@ -190,7 +206,7 @@ off or refuses requests, never silently permissive):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MEDSEAL_DB_URL` | `sqlite:///backend/medseal.db` | SQLAlchemy database URL |
+| `MEDSEAL_DB_URL` | `sqlite:///backend/medseal.db` | SQLAlchemy database URL; production: `postgresql+psycopg://user:password@host/dbname` |
 | `MEDSEAL_KEYS_DIR` | `backend/keys` | device private keys (gitignored) |
 | `MEDSEAL_STORAGE_DIR` | `backend/storage` | sealed files served by `GET /seal/{id}/file` |
 | `MEDSEAL_CORS_ORIGINS` | `localhost:3000` variants | comma-separated allowed origins |
@@ -227,6 +243,8 @@ cd backend
 .venv/bin/pytest -m "not ai" -q   # fast gate, no torch/weights/data needed
 .venv/bin/pytest -q               # full suite; AI-marked tests report SKIPPED without torch/weights/data
 .venv/bin/python -m scripts.demo_smoke   # end-to-end smoke test against a temporary DB/keys/storage
+# the same suite on PostgreSQL (its public schema is wiped before every test — use a throwaway database):
+MEDSEAL_TEST_DB_URL=postgresql+psycopg://medseal@localhost:5433/medseal_test .venv/bin/pytest -q
 ```
 
 ```bash

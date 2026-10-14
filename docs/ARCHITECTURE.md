@@ -105,7 +105,12 @@ Output: one score per pathology in `model.pathologies` (use "Pneumonia" for the 
   "burned_in_annotation"` (the pixels themselves may still show a name; MedSeal cannot inspect
   pixel content for PHI).
 
-## 4. Data model (SQLite)
+## 4. Data model (PostgreSQL in production, SQLite for the offline demo)
+
+Schema owner: Alembic (`backend/migrations`, applied on startup by `app/db.py`); `tests/test_migrations.py`
+keeps it equal to `app/models.py`. On PostgreSQL `ledger.append` takes `pg_advisory_xact_lock` so several
+workers cannot fork the hash chain; `scripts/migrate_sqlite_to_postgres.py` moves a demo database over and
+verifies the chain and the external anchors on arrival.
 
 | Table | Columns |
 |---|---|

@@ -49,7 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Стек
 
-- **Backend:** Python 3.11+, FastAPI, pydicom, numpy, cryptography (Ed25519), Pillow, OpenCV, SQLite (SQLAlchemy)
+- **Backend:** Python 3.11+, FastAPI, pydicom, numpy, cryptography (Ed25519), Pillow, OpenCV, SQLAlchemy + Alembic; PostgreSQL в продакшене (`MEDSEAL_DB_URL=postgresql+psycopg://…`, `docker-compose.yml`), SQLite — по умолчанию для офлайн-демо и тестов
 - **AI:** PyTorch (достаточно CPU), torchxrayvision (предобученная DenseNet для рентгена грудной клетки), torchvision
 - **Frontend:** Next.js (App Router) + TypeScript + Tailwind
 - **Тесты:** pytest (backend), минимальный smoke-тест на Playwright (frontend, опционально)
@@ -90,6 +90,10 @@ export MEDSEAL_ADMIN_TOKEN=dev-admin-token   # без него POST /devices, /r
 .venv/bin/pytest tests/test_seal_core.py::test_one_pixel_change   # один тест
 .venv/bin/python -m scripts.demo_smoke   # сквозной smoke-тест на временных БД/ключах/хранилище/якорях
 # пути БД/ключей/хранилища переопределяются через MEDSEAL_DB_URL, MEDSEAL_KEYS_DIR, MEDSEAL_STORAGE_DIR
+# PostgreSQL: схема — Alembic (backend/migrations, применяется при старте); после правки models.py:
+.venv/bin/alembic revision --autogenerate -m "..."   # tests/test_migrations.py падает, если модели и миграции разошлись
+MEDSEAL_TEST_DB_URL=postgresql+psycopg://medseal@localhost:5433/medseal_test .venv/bin/pytest   # весь набор на PG (схема стирается перед каждым тестом)
+.venv/bin/python -m scripts.migrate_sqlite_to_postgres --source sqlite:///medseal.db --target postgresql+psycopg://...
 
 # первый запуск: корневой ключ → устройство с сертификатом (в этом порядке, один раз)
 .venv/bin/python -m scripts.create_root_key      # backend/keys/root.{pem,pub} — не перезаписывает существующий
