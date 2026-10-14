@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkGatewayAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
+import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
 
 // Server-only: forwards the upload to the backend with the gateway's own device token, so
 // the token never reaches the browser (P0-1). MEDSEAL_DEVICE_TOKEN / MEDSEAL_BACKEND_URL
@@ -11,7 +11,7 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   // Defence in depth: src/proxy.ts already gates this route, but a route handler must not
   // assume the proxy ran in front of it (P1-01).
-  const auth = checkGatewayAuth(req.headers.get("authorization"));
+  const auth = checkStaffAuth(req, "gateway");
   if (!auth.ok) return unauthorizedResponse(auth);
 
   const token = process.env.MEDSEAL_DEVICE_TOKEN;

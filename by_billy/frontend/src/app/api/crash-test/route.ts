@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkGatewayAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
+import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
 
 // Server-only: starting a crash test is an admin action (P1-04). MEDSEAL_ADMIN_TOKEN never
-// reaches the browser; src/proxy.ts + checkGatewayAuth below gate this route with the
+// reaches the browser; src/proxy.ts + checkStaffAuth below gate this route with the
 // operator's own Basic Auth credentials first (P1-01, defence in depth).
 const BACKEND_URL = (process.env.MEDSEAL_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 export async function POST(req: NextRequest) {
-  const auth = checkGatewayAuth(req.headers.get("authorization"));
+  const auth = checkStaffAuth(req, "admin");
   if (!auth.ok) return unauthorizedResponse(auth);
 
   const token = process.env.MEDSEAL_ADMIN_TOKEN;

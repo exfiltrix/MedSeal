@@ -212,6 +212,7 @@ Frontend (`by_billy/frontend/.env.local`, see `.env.example`):
 | `MEDSEAL_DEVICE_TOKEN` | server-only device token, never sent to the browser |
 | `MEDSEAL_ADMIN_TOKEN` | server-only admin token for the crash-test/passport route handlers |
 | `MEDSEAL_GATEWAY_USER` / `MEDSEAL_GATEWAY_PASSWORD` | HTTP Basic Auth in front of `/seal` and the gateway API routes |
+| `MEDSEAL_DOCTOR_USER/PASSWORD`, `MEDSEAL_CLIENT_USER/PASSWORD`, `MEDSEAL_ADMIN_USER/PASSWORD` | a separate login for the inbox, the client cabinet and the admin routes (crash test, passport); an unset pair falls back to the gateway login. State-changing requests from another site are refused (`403`, CSRF) |
 
 ## Tests
 

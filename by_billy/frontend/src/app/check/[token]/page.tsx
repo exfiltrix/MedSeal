@@ -66,9 +66,15 @@ export default function CheckPage({ params }: { params: Promise<{ token: string 
         {info && (
           <div
             role="status"
-            className={`rounded-3xl border p-6 text-center ${good ? "border-ok/30 bg-ok/10 text-ok" : "border-danger/30 bg-danger/10 text-danger"}`}
+            className={`rounded-3xl border p-6 text-center ${
+              info.status === "valid"
+                ? "border-ok/30 bg-ok/10 text-ok"
+                : info.status === "warning"
+                  ? "border-amber-300 bg-amber-50 text-amber-900" // genuine, but not a clean pass
+                  : "border-danger/30 bg-danger/10 text-danger"
+            }`}
           >
-            <p className="text-5xl" aria-hidden>{good ? "✓" : "✕"}</p>
+            <p className="text-5xl" aria-hidden>{info.status === "valid" ? "✓" : info.status === "warning" ? "!" : "✕"}</p>
             <p className="mt-2 text-2xl font-semibold">
               {info.status === "valid" ? t(d.valid) : info.status === "warning" ? t(d.warning) : t(d.invalid)}
             </p>

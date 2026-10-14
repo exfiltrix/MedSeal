@@ -41,9 +41,12 @@ there is no `device_id` field anymore (a client can no longer seal as an arbitra
 `/seal` (the page) and `/api/seal`, `/api/crash-test`, `/api/passport` (the Next.js route handlers) require
 `Authorization: Basic <base64(user:password)>`, checked in `by_billy/frontend/src/proxy.ts` (first) and again inside
 each route handler (`by_billy/frontend/src/lib/gatewayAuth.ts`, defence in depth). Credentials come from server-only
-env vars `MEDSEAL_GATEWAY_USER` / `MEDSEAL_GATEWAY_PASSWORD` (see `by_billy/frontend/.env.example`) — unset means
-those routes refuse every request with `503` (fail closed, never open). Wrong credentials → `401` with
-`WWW-Authenticate: Basic realm="MedSeal gateway"`. `/api/seal` also rejects bodies over 50 MB with `413`, checked
+env vars, one pair per area: `MEDSEAL_GATEWAY_*` (seal), `MEDSEAL_DOCTOR_*` (inbox, automation), `MEDSEAL_CLIENT_*`
+(client cabinet), `MEDSEAL_ADMIN_*` (crash test, passport) — `_USER` / `_PASSWORD`, see `by_billy/frontend/.env.example`;
+an unset pair falls back to `MEDSEAL_GATEWAY_*`, and with nothing set those routes refuse every request with `503`
+(fail closed, never open). Wrong credentials → `401` with `WWW-Authenticate: Basic realm="MedSeal <area>"`.
+State-changing requests whose `Sec-Fetch-Site`/`Origin` is another site → `403` (CSRF: browsers resend cached Basic
+credentials cross-site). `/api/seal` also rejects bodies over 50 MB with `413`, checked
 via the `Content-Length` header before the body is read. This protects the Next.js layer; `POST /seal` on the
 Python backend still separately requires the device bearer token (P0-1) regardless.
 

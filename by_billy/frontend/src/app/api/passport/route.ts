@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkGatewayAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
+import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
 
 // Server-only: issuing a passport is an admin action (P1-04). Same pattern as
 // src/app/api/crash-test/route.ts — see its comment.
 const BACKEND_URL = (process.env.MEDSEAL_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 export async function POST(req: NextRequest) {
-  const auth = checkGatewayAuth(req.headers.get("authorization"));
+  const auth = checkStaffAuth(req, "admin");
   if (!auth.ok) return unauthorizedResponse(auth);
 
   const token = process.env.MEDSEAL_ADMIN_TOKEN;

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkGatewayAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
+import { checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
 
 const BACKEND_URL = (process.env.MEDSEAL_BACKEND_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = checkGatewayAuth(req.headers.get("authorization"));
+  const auth = checkStaffAuth(req, "gateway");
   if (!auth.ok) return unauthorizedResponse(auth);
 
   const token = process.env.MEDSEAL_DEVICE_TOKEN;

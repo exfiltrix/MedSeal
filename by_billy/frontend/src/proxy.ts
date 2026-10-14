@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { checkGatewayAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
+import { areaForPath, checkStaffAuth, unauthorizedResponse } from "@/lib/gatewayAuth";
 
-// P1-01: the /seal page (gateway simulator) and every gateway/admin API route require HTTP
-// Basic Auth. This is the first line of defence; each route handler re-checks independently
-// (defence in depth — see src/lib/gatewayAuth.ts). The same barrier also covers the doctor's
-// /inbox cabinet (real medical images, docs/SECURITY.md T11) and the client (hospital) cabinet
-// — one shared "internal staff" credential for every non-public page on this site.
+// P1-01: the /seal page (gateway simulator), the doctor's /inbox, the client cabinet and every
+// gateway/admin API route require HTTP Basic Auth — with a separate login per area (gateway,
+// doctor, client, admin; see src/lib/gatewayAuth.ts) and a same-site check on state-changing
+// requests (CSRF). This is the first line of defence; each route handler re-checks independently.
 export function proxy(request: NextRequest) {
-  const result = checkGatewayAuth(request.headers.get("authorization"));
+  const result = checkStaffAuth(request, areaForPath(request.nextUrl.pathname));
   if (result.ok) return NextResponse.next();
   return unauthorizedResponse(result);
 }
