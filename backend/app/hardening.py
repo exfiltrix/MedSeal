@@ -39,6 +39,20 @@ def problems() -> list[str]:
     if not settings.data_key:
         out.append("MEDSEAL_DATA_KEY must come from the secret manager (a generated key file next to the "
                    "data it protects is for development only)")
+    if settings.key_backend == "pkcs11":
+        if not (settings.pkcs11_lib and settings.pkcs11_token and settings.pkcs11_pin):
+            out.append("MEDSEAL_KEY_BACKEND=pkcs11 needs MEDSEAL_PKCS11_LIB, MEDSEAL_PKCS11_TOKEN and MEDSEAL_PKCS11_PIN")
+    elif settings.key_backend == "file":
+        if not settings.allow_software_keys:
+            out.append("signing keys are software keys: use an HSM (MEDSEAL_KEY_BACKEND=pkcs11) or accept the risk "
+                       "explicitly with MEDSEAL_ALLOW_SOFTWARE_KEYS=1")
+        from app.seal import keys
+
+        plaintext = keys.plaintext_key_files()
+        if plaintext:
+            out.append(f"{len(plaintext)} private key file(s) are stored unencrypted: run python -m scripts.encrypt_keys")
+    else:
+        out.append(f"MEDSEAL_KEY_BACKEND={settings.key_backend!r}: use 'file' or 'pkcs11'")
     if not settings.require_device_cert:
         out.append("MEDSEAL_REQUIRE_DEVICE_CERT=0 is a migration mode: uncertified devices must fail verification")
     if settings.rate_limit_per_min <= 0:

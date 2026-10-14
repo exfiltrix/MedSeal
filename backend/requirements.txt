@@ -15,3 +15,4 @@ psycopg[binary]==3.3.6  # PostgreSQL driver (MEDSEAL_DB_URL=postgresql+psycopg:/
 alembic==1.20.0  # schema migrations (migrations/), applied on startup by app/db.py
 argon2-cffi==25.1.0  # password hashing (argon2id), app/accounts.py
 pyotp==2.10.0  # TOTP MFA for admins
+python-pkcs11==0.10.0  # HSM signing (MEDSEAL_KEY_BACKEND=pkcs11), app/seal/keys.py

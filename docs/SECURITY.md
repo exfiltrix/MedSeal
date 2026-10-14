@@ -11,7 +11,13 @@ Principle: **don't claim "unhackable" — prove each layer with a standard primi
 | Tamper-evident history | hash-chained ledger + blockchain anchoring | — | rewriting history requires rewriting the chain |
 | Transport | TLS 1.3 + HSTS at the production reverse proxy (the demo runs plain http on a laptop) | RFC 8446 | — |
 
-Keys: generated server-side, one key per device, stored outside the repo (`keys/`, env vars), never logged or returned. Production: HSM/TPM in the gateway, key rotation, revocation list (`devices.revoked`).
+Keys: one Ed25519 key per device plus the root, never logged or returned. Two backends (`app/seal/keys.py`):
+**HSM over PKCS#11** (`MEDSEAL_KEY_BACKEND=pkcs11`: generated inside the HSM as sensitive, non-extractable keys;
+signing happens in the HSM; a second key under an existing label is refused) — the production choice; or
+**encrypted files** (AES-256-GCM with `MEDSEAL_DATA_KEY` from the secret manager, each file bound to its slot),
+which production accepts only with an explicit `MEDSEAL_ALLOW_SOFTWARE_KEYS=1`. Plaintext key files block a
+production start (`scripts/encrypt_keys.py` converts them). Revocation: `devices.revoked`; contract key rotation:
+`transferOwnership`.
 
 ## Threat model
 

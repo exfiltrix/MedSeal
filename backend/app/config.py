@@ -59,6 +59,14 @@ class Settings:
     # deployment can never end up with a public inbox full of medical images. The admin token is
     # also accepted, so one operator can hold both roles.
     doctor_token: str = field(default=os.environ.get("MEDSEAL_DOCTOR_TOKEN", ""), repr=False)
+    # Where private keys live (app/seal/keys.py): "file" = encrypted files in keys_dir,
+    # "pkcs11" = an HSM (keys generated inside it, never exported).
+    key_backend: str = os.environ.get("MEDSEAL_KEY_BACKEND", "file")
+    pkcs11_lib: str = os.environ.get("MEDSEAL_PKCS11_LIB", "")
+    pkcs11_token: str = os.environ.get("MEDSEAL_PKCS11_TOKEN", "")
+    pkcs11_pin: str = field(default=os.environ.get("MEDSEAL_PKCS11_PIN", ""), repr=False)
+    # Production without an HSM must say so explicitly: software keys are a deliberate risk decision.
+    allow_software_keys: bool = os.environ.get("MEDSEAL_ALLOW_SOFTWARE_KEYS", "0") == "1"
     # Root signing material. The private key stays in the gateway/HSM; verifiers use root.pub only.
     root_key_path: Path = _path("MEDSEAL_ROOT_KEY_PATH", BACKEND_DIR / "keys" / "root.pem")
     root_pubkey_path: Path = _path("MEDSEAL_ROOT_PUBKEY_PATH", BACKEND_DIR / "keys" / "root.pub")

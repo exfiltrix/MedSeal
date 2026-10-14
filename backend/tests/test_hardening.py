@@ -8,7 +8,7 @@ STRONG = "x" * 40
 
 
 @pytest.fixture
-def production_ready(monkeypatch):
+def production_ready(monkeypatch, tmp_path):
     """A configuration that passes every check; each test breaks exactly one thing."""
     for name, value in {
         "env": "production",
@@ -25,6 +25,10 @@ def production_ready(monkeypatch):
         "anchor_private_key": STRONG,
         "chain_id": 11155111,
         "data_key": "k" * 44,
+        "key_backend": "file",
+        "allow_software_keys": True,
+        "keys_dir": tmp_path / "keys",
+        "root_key_path": tmp_path / "keys" / "root.pem",
     }.items():
         monkeypatch.setattr(settings, name, value)
     assert hardening.problems() == []
@@ -44,6 +48,8 @@ def production_ready(monkeypatch):
     ("cors_origins", ["http://medseal.example.uz"], "https"),
     ("rpc_url", "", "anchoring must be configured"),
     ("chain_id", 31337, "local development chain"),
+    ("allow_software_keys", False, "MEDSEAL_KEY_BACKEND=pkcs11"),
+    ("key_backend", "vault", "use 'file' or 'pkcs11'"),
 ])
 def test_each_unsafe_setting_is_named(production_ready, name, value, expected):
     production_ready.setattr(settings, name, value)
@@ -75,3 +81,20 @@ def test_production_app_does_not_start_with_sqlite(client, monkeypatch):
     with pytest.raises(hardening.InsecureConfiguration):
         with TestClient(app):
             pass
+
+
+def test_hsm_backend_needs_its_configuration(production_ready):
+    production_ready.setattr(settings, "key_backend", "pkcs11")
+    found = hardening.problems()
+    assert len(found) == 1 and "MEDSEAL_PKCS11_LIB" in found[0]
+
+
+def test_plaintext_key_files_block_production(production_ready, tmp_path):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    (tmp_path / "keys").mkdir()
+    (tmp_path / "keys" / "device_7.pem").write_bytes(Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    found = hardening.problems()
+    assert len(found) == 1 and "scripts.encrypt_keys" in found[0]

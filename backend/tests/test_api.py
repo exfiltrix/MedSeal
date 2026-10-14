@@ -268,9 +268,9 @@ def test_device_never_exposes_private_key_or_token(client, device, tmp_path):
     assert set(device) - {"auth"} == {"id", "name", "hospital", "public_key_hex", "revoked", "created_at", "token"}
     assert len(device["public_key_hex"]) == 64
     assert len(device["token"]) > 20  # returned once, at creation, only
-    pem = (tmp_path / "keys" / f"device_{device['id']}.pem").read_bytes()
+    stored = (tmp_path / "keys" / f"device_{device['id']}.pem").read_bytes()
     listed = client.get("/api/devices").text
-    assert b"PRIVATE KEY" in pem
+    assert stored.startswith(b"MSB1") and b"PRIVATE KEY" not in stored  # encrypted at rest
     assert "PRIVATE" not in listed
     assert device["token"] not in listed
 
