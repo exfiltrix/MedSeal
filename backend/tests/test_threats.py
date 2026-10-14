@@ -19,7 +19,9 @@ from tests.conftest import admin_headers, xray_png
 from tests.test_api import seal, verify
 
 THREAT_TESTS = {
-    "T1": ["test_seal_core::test_fake_nodule_is_localised"],
+    "T1": ["test_seal_core::test_fake_nodule_is_localised",
+           "test_api::test_display_chunk_added_after_sealing_is_tampering",
+           "test_api::test_icc_profile_swapped_after_sealing_is_tampering"],
     "T2": ["test_seal_core::test_one_pixel_change", "test_api::test_png_one_pixel_change"],
     "T3": ["test_seal_core::test_forged_ledger_without_key_is_rejected", "test_api::test_forged_ledger_row_is_rejected",
            "test_seal_core::test_leaves_edited_but_root_kept_is_rejected"],
@@ -38,7 +40,8 @@ THREAT_TESTS = {
     "T11": ["test_threats::test_t11_security_headers", "test_threats::test_t11_rate_limit",
             "test_threats::test_t11_sql_injection_in_uid", "test_api::test_create_device_requires_admin_token",
             "test_api::test_seal_requires_a_device_token"],
-    "T12": ["test_api::test_dicom_seal_strips_patient_tags", "test_threats::test_t12_chain_gets_only_hashes"],
+    "T12": ["test_api::test_dicom_seal_strips_patient_tags", "test_threats::test_t12_chain_gets_only_hashes",
+            "test_api::test_png_text_chunks_are_removed_on_sealing"],
 }
 SECURITY_MD = BACKEND_DIR.parent / "docs" / "SECURITY.md"
 

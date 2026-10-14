@@ -707,3 +707,63 @@ def test_stats(client, device):
 def test_cors_allows_frontend_on_any_private_ip(client, origin, allowed):
     r = client.options("/api/verify", headers={"Origin": origin, "Access-Control-Request-Method": "POST"})
     assert (r.headers.get("access-control-allow-origin") == origin) is allowed
+
+
+def _with_chunk(png: bytes, ctype: bytes, payload: bytes) -> bytes:
+    """The same PNG with one extra ancillary chunk right after IHDR: not a single pixel changes."""
+    import zlib
+
+    chunk = struct.pack(">I", len(payload)) + ctype + payload
+    chunk += struct.pack(">I", zlib.crc32(ctype + payload) & 0xFFFFFFFF)
+    return png[:33] + chunk + png[33:]
+
+
+@pytest.mark.parametrize("ctype,payload", [
+    (b"gAMA", struct.pack(">I", 10000)),  # gamma 0.1: the viewer renders a very different picture
+    (b"sRGB", b"\x03"),
+    (b"cHRM", struct.pack(">8I", 31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000)),
+])
+def test_display_chunk_added_after_sealing_is_tampering(client, device, ctype, payload):
+    """A colour/gamma chunk changes what the doctor sees without touching the pixels."""
+    _, sealed = seal(client, device, xray_png(seed=61))
+    assert verify(client, sealed)["status"] == "authentic"
+    result = verify(client, _with_chunk(sealed, ctype, payload))
+    assert result["status"] == "tampered"
+    assert result["reason"] == "metadata_changed"
+    assert result["changed_tiles"] == []
+
+
+def test_icc_profile_swapped_after_sealing_is_tampering(client, device):
+    from PIL import ImageCms, PngImagePlugin
+
+    _, sealed = seal(client, device, xray_png(seed=62))
+    img = Image.open(io.BytesIO(sealed))
+    info = PngImagePlugin.PngInfo()
+    for k, v in img.text.items():
+        info.add_text(k, v)
+    buf = io.BytesIO()
+    img.save(buf, "PNG", pnginfo=info, icc_profile=ImageCms.ImageCmsProfile(ImageCms.createProfile("LAB")).tobytes())
+    result = verify(client, buf.getvalue())
+    assert result["status"] == "tampered" and result["reason"] == "metadata_changed"
+    assert "icc_profile" in result["changed_meta"]
+
+
+def test_png_with_display_chunks_still_verifies_as_sealed(client, device):
+    """Chunks present at upload are normalised by the sealed copy, which then verifies cleanly."""
+    original = _with_chunk(xray_png(seed=63), b"gAMA", struct.pack(">I", 45455))
+    _, sealed = seal(client, device, original)
+    assert verify(client, sealed)["status"] == "authentic"
+
+
+def test_png_text_chunks_are_removed_on_sealing(client, device):
+    """T12: PNG exports carry patient names/dates in text chunks; only the seal ID may survive."""
+    from PIL import PngImagePlugin
+
+    info = PngImagePlugin.PngInfo()
+    info.add_text("PatientName", "Ivanov Ivan")
+    info.add_itxt("Comment", "DOB 1980-01-01")
+    buf = io.BytesIO()
+    Image.open(io.BytesIO(xray_png(seed=64))).save(buf, "PNG", pnginfo=info)
+    _, sealed = seal(client, device, buf.getvalue())
+    assert set(Image.open(io.BytesIO(sealed)).text) == {"medseal_uid"}
+    assert b"Ivanov" not in sealed and b"1980" not in sealed

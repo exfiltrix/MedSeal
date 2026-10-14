@@ -22,6 +22,11 @@ from pydicom.uid import generate_uid
 from app.config import settings
 
 PNG_UID_KEY = "medseal_uid"
+# Metadata version for new seals. 3 = v2 DICOM tags + the PNG chunks that change how a viewer
+# renders the pixels (gAMA/cHRM/sRGB/iCCP/tRNS). Older rows keep verifying with their stored version.
+META_VERSION = 3
+# Pillow's names for the display-affecting PNG chunks bound by META_VERSION 3.
+PNG_DISPLAY_KEYS = ("gamma", "chromaticity", "srgb", "transparency", "icc_profile")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 # Display-affecting DICOM tags included in the v1 metadata hash. This tuple is frozen
@@ -208,7 +213,15 @@ def meta_fields(image: "LoadedImage", version: int = 1) -> dict:
                 if 0x6000 <= group <= 0x60FF and group % 2 == 0:
                     out[f"{group:04X}{element.tag.element:04X}"] = _canonical_value(element.value)
         return out
-    return {"mode": image.pil.mode if image.pil is not None else "unknown"}
+    out = {"mode": image.pil.mode if image.pil is not None else "unknown"}
+    if version >= 3 and image.pil is not None:
+        # A gAMA or ICC chunk added after sealing re-renders the image (darker, inverted colours...)
+        # without touching a single pixel, so these chunks are signed like the DICOM VOI LUT is.
+        for key in PNG_DISPLAY_KEYS:
+            if key in image.pil.info:
+                value = image.pil.info[key]
+                out[key] = hashlib.sha256(value).hexdigest() if isinstance(value, bytes) else _canonical_value(value)
+    return out
 
 
 def patient_reference(patient_id: str | None) -> str:
@@ -307,15 +320,16 @@ def assign_uid(image: LoadedImage) -> str:
 
 
 def sealed_file_bytes(image: LoadedImage) -> tuple[bytes, str]:
-    """File to hand back after sealing: DICOM without patient tags, or PNG with a medseal_uid chunk."""
+    """File to hand back after sealing: DICOM without patient tags, or PNG with only a medseal_uid
+    text chunk. Re-saving drops gAMA/cHRM/sRGB (Pillow does not write them) and keeps an ICC profile,
+    so the signed metadata must be read from these bytes, not from the upload."""
     buf = io.BytesIO()
     if image.kind == "dicom":
         image.dataset.save_as(buf, enforce_file_format=True)
         return buf.getvalue(), "dcm"
+    # Only the seal ID is written back: free-text chunks (tEXt/iTXt/zTXt) are where PNG exports
+    # carry patient names and dates, and the PNG must be de-identified like a DICOM is (T12).
     info = PngImagePlugin.PngInfo()
-    for k, v in image.pil.text.items():
-        if k != PNG_UID_KEY:
-            info.add_text(k, v)
     info.add_text(PNG_UID_KEY, image.uid)
-    image.pil.save(buf, "PNG", pnginfo=info)
+    image.pil.save(buf, "PNG", pnginfo=info, exif=b"")
     return buf.getvalue(), "png"

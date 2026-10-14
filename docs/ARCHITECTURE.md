@@ -86,7 +86,14 @@ Output: one score per pathology in `model.pathologies` (use "Pneumonia" for the 
   `AcquisitionDate`, and every element in the overlay-plane groups `0x6000`–`0x60FF` (canonical
   JSON of sequence items, so a fake finding drawn as an overlay is caught even though it never
   touches `PixelData`). `seals.meta_version` records which set a row was signed against; v1 rows
-  keep verifying with the v1 set forever, only new seals use v2.
+  keep verifying with the v1 set forever, v2 rows with v2.
+- **v3 (current, review round 1):** DICOM as v2; PNG additionally binds the chunks that change how a
+  viewer renders the same pixels — `gAMA`, `cHRM`, `sRGB`, `tRNS` (values) and `iCCP` (sha256 of the
+  profile). Before v3 a `gAMA`/ICC chunk added after sealing re-rendered the image while `/verify`
+  still said `authentic`. The fields are read from the sealed copy itself (re-saving drops
+  `gAMA`/`cHRM`/`sRGB` and keeps ICC), so the copy handed back always verifies cleanly.
+- PNG de-identification: the sealed copy keeps only the `medseal_uid` text chunk; every other
+  `tEXt`/`iTXt`/`zTXt` chunk and EXIF is dropped (T12 — PNG exports carry patient names there).
 - De-identification (`strip_patient_tags`) removes every element with VR `PN` recursively
   through sequences, plus `AccessionNumber`, `InstitutionName`, `InstitutionAddress`,
   `InstitutionalDepartmentName`, `ReferringPhysicianName`, `PerformingPhysicianName`,

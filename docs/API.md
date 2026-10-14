@@ -47,7 +47,7 @@ those routes refuse every request with `503` (fail closed, never open). Wrong cr
 via the `Content-Length` header before the body is read. This protects the Next.js layer; `POST /seal` on the
 Python backend still separately requires the device bearer token (P0-1) regardless.
 
-`GET /seal/{id}/file` — sealed file to download: DICOM with patient tags removed (pixels unchanged) / PNG with `medseal_uid` chunk (pixels unchanged). **SEC-01:** requires a device bearer token *or* the admin token (`401` without one); the frontend's own `/api/seal/[id]/file` route handler forwards the device token server-side.
+`GET /seal/{id}/file` — sealed file to download: DICOM with patient tags removed (pixels unchanged) / PNG with `medseal_uid` chunk (pixels unchanged; every other text chunk and EXIF removed). **SEC-01:** requires a device bearer token *or* the admin token (`401` without one); the frontend's own `/api/seal/[id]/file` route handler forwards the device token server-side.
 **For the demo, verify the downloaded file** — a PNG that never went through `/seal` has no `medseal_uid` and is always `unsigned`.
 
 `GET /seals?limit=50` — latest seals (same shape as the `POST /seal` response, without `seal_ms`). **SEC-01:** same auth as the file download above (`401` without a device or admin token) — sealed files were previously listable by anyone.
@@ -294,7 +294,7 @@ inline above, in context. Collected here as one changelog per HYG-04.
 - `patient_check`: `"matched" | "mismatch" | "not_available"`, new field (CRY-01).
 - `ai_note`: `"not_applicable"`, new field, `detective`/`shield` both `null` alongside it (IMG-05).
 - `phi_warning`: `"burned_in_annotation"`, new field on `POST /seal` and `POST /verify` (IMG-03).
-- `changed_meta`: list of changed metadata tag names alongside `reason: "metadata_changed"` (P0-5/IMG-04, tag set widened to `META_TAGS_V2` including DICOM overlay planes).
+- `changed_meta`: list of changed metadata tag names alongside `reason: "metadata_changed"` (P0-5/IMG-04, tag set widened to `META_TAGS_V2` including DICOM overlay planes; v3 adds the PNG display chunks `gamma`, `chromaticity`, `srgb`, `transparency`, `icc_profile`).
 - `detective.heatmap_png` removed from this public response (P1-05); `detective.experimental` is now always `true`.
 
 **`GET /ledger/check`**: response gained `anchors_checked`, `anchor_mismatch` (CRY-03); `ok`

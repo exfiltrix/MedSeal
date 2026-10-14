@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.imaging import (
+    META_VERSION,
     LoadedImage,
     assign_uid,
     dhash,
+    load_image,
     meta_fields,
     meta_hash,
     patient_reference,
@@ -52,7 +54,10 @@ def seal_upload(session: Session, image: LoadedImage, device_id: int) -> tuple[S
             raise SealError(409, f"Image is derived from sealed image #{candidate.id}")
 
     uid = assign_uid(image)
-    fields = meta_fields(image, version=2)
+    content, ext = sealed_file_bytes(image)
+    # Sign the metadata of the file actually handed back (see sealed_file_bytes), so the sealed
+    # copy verifies as authentic and a display chunk added later shows up as metadata_changed.
+    fields = meta_fields(load_image(content), version=META_VERSION)
     mh = meta_hash(fields)
     created_at = utcnow()
     patient_ref = patient_reference(image.patient_id)
@@ -72,13 +77,12 @@ def seal_upload(session: Session, image: LoadedImage, device_id: int) -> tuple[S
         tile=tile,
         root_hex=root.hex(),
         meta_hash_hex=mh.hex(),
-        meta_version=2,
+        meta_version=META_VERSION,
         patient_ref=patient_ref,
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000
     record = {"uid": uid, "tile": tile, "leaves": leaves, "root": root, "sig": signature}
 
-    content, ext = sealed_file_bytes(image)
     file_name = f"{uuid.uuid4().hex}.{ext}"
     settings.storage_dir.mkdir(parents=True, exist_ok=True)
     (settings.storage_dir / file_name).write_bytes(content)
@@ -94,7 +98,7 @@ def seal_upload(session: Session, image: LoadedImage, device_id: int) -> tuple[S
         root_hex=record["root"].hex(),
         meta_hash_hex=mh.hex(),
         meta_json=json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
-        meta_version=2,
+        meta_version=META_VERSION,
         sig_version=2,
         patient_ref=patient_ref,
         phi_warning="burned_in_annotation" if image.burned_in_annotation else "",
