@@ -1,12 +1,23 @@
 {
-  "method": "median 3x3, L1 distance of DenseNet logits",
-  "threshold": 10.419,
+  "method": "max over squeezers (median3, median2, bits5) of the L1 distance of DenseNet logits, each divided by its median on clean X-rays",
+  "version": 2,
+  "squeezers": [
+    "median3",
+    "median2",
+    "bits5"
+  ],
+  "scales": {
+    "median3": 4.0786,
+    "median2": 2.8016,
+    "bits5": 12.4374
+  },
+  "threshold": 2.928,
   "percentile": 99,
   "dataset": "NIH ChestX-ray14 (CC0), 300 px subset: No Finding + findings",
-  "n_calibration": 450,
-  "n_held_out": 450,
+  "n_calibration": 1250,
+  "n_held_out": 1250,
   "false_positive_count": 4,
-  "false_positive_rate": 0.009,
+  "false_positive_rate": 0.003,
   "detection_rate": {
     "fgsm": {
       "0.5": {
@@ -16,13 +27,13 @@
       },
       "1": {
         "attacks_that_fooled_model": 21,
-        "detected_count": 13,
-        "detected": 0.6190476190476191
+        "detected_count": 17,
+        "detected": 0.81
       },
       "2": {
         "attacks_that_fooled_model": 30,
-        "detected_count": 26,
-        "detected": 0.8666666666666667
+        "detected_count": 27,
+        "detected": 0.9
       },
       "4": {
         "attacks_that_fooled_model": 30,
@@ -53,10 +64,62 @@
       }
     }
   },
+  "detection_rate_reverse": {
+    "fgsm": {
+      "0.5": {
+        "attacks_that_fooled_model": 22,
+        "detected_count": 0,
+        "detected": 0.0
+      },
+      "1": {
+        "attacks_that_fooled_model": 27,
+        "detected_count": 0,
+        "detected": 0.0
+      },
+      "2": {
+        "attacks_that_fooled_model": 25,
+        "detected_count": 6,
+        "detected": 0.24
+      },
+      "4": {
+        "attacks_that_fooled_model": 8,
+        "detected_count": 8,
+        "detected": 1.0
+      }
+    },
+    "pgd": {
+      "0.5": {
+        "attacks_that_fooled_model": 24,
+        "detected_count": 6,
+        "detected": 0.25
+      },
+      "1": {
+        "attacks_that_fooled_model": 30,
+        "detected_count": 27,
+        "detected": 0.9
+      },
+      "2": {
+        "attacks_that_fooled_model": 30,
+        "detected_count": 30,
+        "detected": 1.0
+      },
+      "4": {
+        "attacks_that_fooled_model": 30,
+        "detected_count": 30,
+        "detected": 1.0
+      }
+    }
+  },
   "confidence_intervals": {
-    "detection_pgd_eps1": [0.880555, 1.0],
-    "false_positive_rate": [0.002427, 0.022602]
+    "detection_pgd_eps1": [
+      0.8805551309304971,
+      1.0
+    ],
+    "false_positive_rate": [
+      0.0008725593515032659,
+      0.008172834739551826
+    ]
   },
   "adaptive_attack_tested": false,
-  "created_at": "2026-09-25T06:21:34Z"
+  "created_at": "2026-10-14T14:42:51Z"
 }

@@ -130,11 +130,20 @@ def test_issue_and_read(client, model_id, device):
     assert p["robustness"]["crash_test_id"] == ct and p["robustness"]["score"] == 0.2
     assert p["robustness"]["formula"] == report.SCORE_FORMULA
     assert p["shield"]["compatible"] is True  # AI-01: point estimate (see test below for the interval-vs-point proof)
-    assert p["shield"]["confidence_intervals"]["detection_pgd_eps1"]["lower"] == 0.880555
-    assert p["shield"]["confidence_intervals"]["false_positive_rate"]["upper"] == 0.022602
-    assert p["shield"]["adaptive_attack_tested"] is False
+    # The intervals are recomputed from the committed calibration, on the worse attack direction.
+    from app.ai.statistics import clopper_pearson
+    from app.config import settings
+
+    c = json.loads(settings.shield_calibration.read_text())
+    worst = report._worst(c["detection_rate"]["pgd"]["1"], (c.get("detection_rate_reverse") or {}).get("pgd", {}).get("1"))
+    lower, _ = clopper_pearson(worst["detected_count"], worst["attacks_that_fooled_model"])
+    _, fpr_upper = clopper_pearson(c["false_positive_count"], c["n_held_out"])
+    assert p["shield"]["confidence_intervals"]["detection_pgd_eps1"]["lower"] == round(lower, 6)
+    assert p["shield"]["confidence_intervals"]["false_positive_rate"]["upper"] == round(fpr_upper, 6)
+    assert p["shield"]["adaptive_attack_tested"] is ("adaptive" in c)
     assert p["verdict"] == "allowed_with_conditions"
-    assert p["conditions"] == ["clinical_validation_required", "shield_required", "seal_required", "doctor_decides"]
+    bypass = ["shield_bypassable_adaptive"] if p["shield"]["bypassable"] else []
+    assert p["conditions"] == ["clinical_validation_required", "shield_required", *bypass, "seal_required", "doctor_decides"]
     assert p["clinical_validation"] is None
     assert p["pipeline"] == {"devices_active": 1, "seals": 0, "verifications": 0, "tampered_or_forged": 0,
                              "ledger_ok": True}
