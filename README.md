@@ -77,7 +77,7 @@ decompression-bomb limits, secrets only in `.env`.
 |---|---|
 | Seal / verify, 512×512 | ≈ 1 ms each (2048×2048: ≈ 16 ms) |
 | Change detected | a single pixel changed by 1 |
-| Shield | 0.3% false alarms on 1250 clean adult X-rays. Healthy → sick: PGD caught 100% at ε ≥ 1 px, FGSM 81% / 90% / 100% at ε 1 / 2 / 4. Sick → healthy (hiding a finding): PGD 90% / 100% / 100%, FGSM 0% / 44% / 100%. Shield-aware (adaptive) attacks: 63–90% get through at ε 1 |
+| Shield | 0.3% false alarms on 1250 clean adult X-rays. Healthy → sick: PGD caught 100% at ε ≥ 1 px, FGSM 81% / 90% / 100% at ε 1 / 2 / 4. Sick → healthy (hiding a finding): PGD 90% / 100% / 100%, FGSM 0% / 24% / 100%. Shield-aware (adaptive) attacks: 63–90% get through at ε 1 |
 | Detective | AUC 0.93 on 1000 held-out images; finds ~8 of 10 edits (all removals); 10% false alarms, at most 20% after routine processing (CLAHE, JPEG, resize…) — shown only as a probability |
 | Robustness score | `round(10 × (1 − worst share of diagnoses flipped at ε = 1 px, of both directions), 1)` |
 
