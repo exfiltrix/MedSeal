@@ -11,19 +11,19 @@
   "test": {
     "images": 500,
     "forgeries": 500,
-    "auc": 0.942,
-    "accuracy": 0.881,
-    "false_alarms_on_real": 0.084,
+    "auc": 0.929,
+    "accuracy": 0.865,
+    "false_alarms_on_real": 0.102,
     "recall_by_kind": {
-      "nodule": 0.8,
-      "splice": 0.784,
+      "nodule": 0.776,
+      "splice": 0.752,
       "copy_move": 0.8,
       "removal": 1.0
     },
-    "heatmap_hits_edit": 0.048
+    "heatmap_hits_edit": 0.036
   },
   "out_of_domain": {
-    "kermany_paediatric_false_alarms": 0.545
+    "kermany_paediatric_false_alarms": 0.434
   },
-  "created_at": "2026-09-25T07:22:50Z"
+  "created_at": "2026-10-14T14:55:08Z"
 }
