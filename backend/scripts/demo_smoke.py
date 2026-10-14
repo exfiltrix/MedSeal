@@ -144,6 +144,7 @@ def main() -> int:
                     results_json=(
                         '{"n_requested":50,"n_images":50,"method":"pgd","pathology":"Pneumonia",'
                         '"data":["synthetic"],"eps":[0.5,1,2,4],"flip_rate":{"0.5":0.2,"1":0.98,"2":1,"4":1},'
+                        '"n_images_reverse":30,"flip_rate_reverse":{"0.5":0.3,"1":1,"2":1,"4":1},'
                         '"psnr":{"0.5":55,"1":50,"2":48,"4":45},"robustness_score":0.2}'
                     ),
                     robustness_score=0.2,
