@@ -8,7 +8,8 @@
 - Rows are copied table by table in foreign-key order with their original ids, then each
   PostgreSQL id sequence is moved past the copied rows.
 - The copy is verified on the target before reporting success: same row count per table, an
-  unbroken hash chain, and every external anchor (MEDSEAL_ANCHOR_PATH) still matching. The anchor
+  unbroken seal hash chain and audit hash chain, and every external anchor (MEDSEAL_ANCHOR_PATH)
+  still matching. The anchor
   file, keys and stored images stay where they are: only the database moves.
 Exit code 0 = migrated and verified; anything else = nothing to trust, see the message.
 """
@@ -18,7 +19,7 @@ from datetime import timezone
 
 from sqlalchemy import DateTime, create_engine, func, inspect, select, text
 
-from app import db, models  # noqa: F401  (registers every table)
+from app import audit, db, models  # noqa: F401  (registers every table)
 from app.seal import anchors, ledger
 
 
@@ -72,6 +73,10 @@ def verify(target_engine, copied: dict[str, int]) -> list[str]:
         _checked, mismatch = anchors.check_anchors(session)
         if mismatch:
             problems.append(f"external anchors do not match rows {mismatch[:10]}")
+        audit.link_pending(session)  # rows from a pre-chain source get linked here
+        audit_broken = audit.check(session)["broken"]
+        if audit_broken:
+            problems.append(f"audit hash chain broken on the target at rows {audit_broken[:10]}")
     return problems
 
 

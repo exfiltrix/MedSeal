@@ -206,3 +206,7 @@ class AuditEvent(Base):
     target: Mapped[str] = mapped_column(String(200), default="")  # e.g. seal:12, device:3, anchor:5
     result: Mapped[str] = mapped_column(String(64), default="")  # e.g. sealed, authentic, forged, rejected:409
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Hash chain (review round 1), filled right after the row is committed (app/audit.py: link_pending):
+    # entry_hash = sha256(prev_hash + canonical row). "" = not linked yet.
+    prev_hash: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    entry_hash: Mapped[str] = mapped_column(String(64), default="", server_default="")

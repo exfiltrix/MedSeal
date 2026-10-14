@@ -323,5 +323,9 @@ is now `false` if either the hash chain or an anchor fails.
 - `/ledger/check`: a v2 seal without an anchor line is an `anchor_mismatch` (deleted / truncated anchor file).
 - Inbox: watched files are identified by name **and** content hash.
 
+- `GET /audit/check` (admin) → `{"ok": bool, "entries": n, "linked": n, "broken": [ids]}`: the audit log is
+  hash-chained (`prev_hash`/`entry_hash`, linked right after each commit); `broken` lists rows that were
+  edited or whose predecessor was deleted.
+
 **Removed**: nothing was removed from the public surface except `detective.heatmap_png`
 (above) — every other change is additive.

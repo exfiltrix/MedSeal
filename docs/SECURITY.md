@@ -63,5 +63,8 @@ Every seal, verification, key change and anchor is logged (who, when, result) in
 - T1 (review round 1): PNG display chunks (`gAMA`, `cHRM`, `sRGB`, `tRNS`, `iCCP`) are bound into the
   signed metadata (`meta_version` 3); before, adding one re-rendered the image while `/verify` said
   `authentic`.
-- Audit log: table `audit_log`, `GET /api/audit` (admin). Rows can be removed only with direct database access — the same insider case the blockchain covers for seals (the audit log itself is not anchored).
+- Audit log: table `audit_log`, `GET /api/audit` (admin). Rows are hash-chained like the ledger
+  (`prev_hash`/`entry_hash`, linked right after each commit under a lock); `GET /api/audit/check`
+  reports edited rows and rows whose predecessor was deleted. Not yet anchored externally: an insider
+  who recomputes the whole chain, or deletes only the newest rows, is not caught by the chain alone.
 - No `alg` field in the seal yet: the tile tree is frozen format v1; a version column comes with the post-quantum / domain-separated migration.
