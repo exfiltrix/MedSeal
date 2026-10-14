@@ -85,6 +85,11 @@ class Settings:
     gateway_name: str = os.environ.get("MEDSEAL_GATEWAY_NAME", "Shlyuz-Auto")
     gateway_hospital: str = os.environ.get("MEDSEAL_GATEWAY_HOSPITAL", "Namangan viloyat shifoxonasi")
     warmup: bool = os.environ.get("MEDSEAL_WARMUP", "1") != "0"
+    # Which background loops this process runs (app/main.py, app/worker.py):
+    #   all    — everything in one process (development, a single small server)
+    #   api    — HTTP only; run `python -m app.worker` separately (several API workers + one worker)
+    #   worker — set by app/worker.py itself
+    process_role: str = os.environ.get("MEDSEAL_PROCESS_ROLE", "all")
     # Blockchain anchoring (docs/BLOCKCHAIN.md). Names as in the doc, no MEDSEAL_ prefix. Anchoring is
     # on only when RPC_URL, CONTRACT_ADDRESS and ANCHOR_PRIVATE_KEY are all set; otherwise /verify
     # returns "blockchain": null. The key is never logged or returned (repr=False keeps it out of reprs).

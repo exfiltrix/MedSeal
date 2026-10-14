@@ -90,6 +90,13 @@ class CrashTest(Base):
     results_json: Mapped[str] = mapped_column(Text, default="{}")
     robustness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Job state lives here, not in a process's memory (app/jobs.py): any API worker can answer the
+    # status, and a dedicated worker process runs the job. queued -> running -> done | error.
+    status: Mapped[str] = mapped_column(String(16), default="queued", server_default="done", index=True)
+    params_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    progress: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    error: Mapped[str] = mapped_column(Text, default="", server_default="")
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Passport(Base):

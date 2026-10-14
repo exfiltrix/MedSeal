@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import db, hardening, observability, security
+from app import db, hardening, jobs, observability, security
 from app.config import settings
 from app.db import init_engine
 from app.anchor import chain as anchor_chain, service as anchoring
@@ -17,8 +17,8 @@ def _read_sealed_file(row) -> bytes | None:
     return path.read_bytes() if path.exists() else None
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def prepare() -> None:
+    """Startup shared by the API and the worker process: checks, schema, seed data, backfills."""
     observability.configure_logging()
     hardening.check_on_startup()  # MEDSEAL_ENV=production: refuse to start on an unsafe configuration
     init_engine()
@@ -27,8 +27,10 @@ async def lifespan(app: FastAPI):
         # P1-03: fills dhash_hex for rows sealed before this column existed. Read-only over the
         # stored files, writes only dhash_hex — never a hashed/signed field.
         backfill_dhash(session, _read_sealed_file)
-    if settings.warmup:
-        warmup.start()
+
+
+def start_background() -> None:
+    """The loops that must run in exactly one process: folder watcher, anchoring, job worker."""
     if settings.watch_enabled:
         watcher.start()
     if anchor_chain.configured():
@@ -36,12 +38,30 @@ async def lifespan(app: FastAPI):
             anchoring.resync_local_chain(session)  # local Hardhat node restarted since last run
     if settings.anchor_enabled and anchor_chain.configured():
         anchoring.start()
+    jobs.start()
+
+
+def stop_background() -> None:
+    jobs.stop(wait=True)
+    watcher.stop()
+    anchoring.stop()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    prepare()
+    if settings.warmup:  # the API answers /verify with the shield, so the model is loaded here
+        warmup.start()
+    # MEDSEAL_PROCESS_ROLE=api: several uvicorn workers serve HTTP and `python -m app.worker` runs
+    # the loops once; "all" keeps everything in this one process (development, a single server).
+    background = settings.process_role == "all"
+    if background:
+        start_background()
     try:
         yield
     finally:
-        crash_test.shutdown_worker(wait=True)
-        watcher.stop()
-        anchoring.stop()
+        if background:
+            stop_background()
 
 
 # Production: no interactive API explorer on the public surface (it maps every endpoint for an attacker).

@@ -210,6 +210,7 @@ off or refuses requests, never silently permissive):
 | `MEDSEAL_ENV` | `development` | `production` = refuse to start on any unsafe setting (`python -m app.hardening` lists them) |
 | `MEDSEAL_DATA_KEY` | *(dev: generated file)* | base64 32-byte key for data at rest (key files, TOTP secrets); from the secret manager in production |
 | `MEDSEAL_KEY_BACKEND` | `file` | `pkcs11` = keys in an HSM (`MEDSEAL_PKCS11_LIB`, `MEDSEAL_PKCS11_TOKEN`, `MEDSEAL_PKCS11_PIN`); `file` = encrypted key files (production needs `MEDSEAL_ALLOW_SOFTWARE_KEYS=1`) |
+| `MEDSEAL_PROCESS_ROLE` | `all` | `api` = HTTP only, for several uvicorn workers; then run exactly one `python -m app.worker` (folder watcher, anchoring, crash-test jobs) |
 | `MEDSEAL_DB_URL` | `sqlite:///backend/medseal.db` | SQLAlchemy database URL; production: `postgresql+psycopg://user:password@host/dbname` |
 | `MEDSEAL_KEYS_DIR` | `backend/keys` | device private keys (gitignored) |
 | `MEDSEAL_STORAGE_DIR` | `backend/storage` | sealed files served by `GET /seal/{id}/file` |

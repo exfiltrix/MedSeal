@@ -53,6 +53,8 @@ def problems() -> list[str]:
             out.append(f"{len(plaintext)} private key file(s) are stored unencrypted: run python -m scripts.encrypt_keys")
     else:
         out.append(f"MEDSEAL_KEY_BACKEND={settings.key_backend!r}: use 'file' or 'pkcs11'")
+    if settings.process_role not in ("all", "api", "worker"):
+        out.append(f"MEDSEAL_PROCESS_ROLE={settings.process_role!r}: use 'api' (with python -m app.worker) or 'all'")
     if not settings.require_device_cert:
         out.append("MEDSEAL_REQUIRE_DEVICE_CERT=0 is a migration mode: uncertified devices must fail verification")
     if settings.rate_limit_per_min <= 0:

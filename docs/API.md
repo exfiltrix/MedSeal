@@ -196,7 +196,10 @@ non-`authentic` outcomes for this organisation's own sealed images (tampered / f
 - **P1-04:** admin-only (`401` without the admin token) — the frontend calls its own `POST /api/crash-test` route handler
   (the signed-in admin's session forwarded), never the backend directly. Reading endpoints below stay public.
 - Defaults as shown; `n_images` 1–200, each eps in (0, 16] pixel units. Errors: 404 unknown model, 400 not the built-in model, 422 bad input, 503 AI modules not installed.
-- One job runs at a time; 50 images with PGD take ~80 s on a laptop CPU. Poll `GET /crash-test/{job_id}` every ~1 s.
+- One job runs at a time, across every process (`409` while one is queued or running); 50 images with PGD take
+  ~80 s on a laptop CPU. Poll `GET /crash-test/{job_id}` every ~1 s: `status` is `queued | running | done | error`.
+  The job lives in the `crash_tests` row (app/jobs.py), so any API worker answers; a job whose worker stops
+  heartbeating for 2 min becomes `error` ("Job was interrupted").
 
 `GET /crash-test/{job_id}` while running:
 ```json
